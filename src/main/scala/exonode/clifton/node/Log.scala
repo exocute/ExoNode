@@ -20,8 +20,7 @@ object Log {
 
   private val log: LoggingSignal = new LoggingSignal
 
-  private val TIME = 60 * 60 * 1000
-  private val outChannel: OutChannel = new SignalOutChannel(Protocol.LOG_MARKER, TIME)
+  private val outChannel: OutChannel = new SignalOutChannel(Protocol.LOG_MARKER, Protocol.LOG_LEASE_TIME)
 
   private def sendMessage(msg: String, logLevel: LogLevel): Unit = {
     log.setLogLevel(logLevel)

@@ -1,5 +1,7 @@
 package exonode.clifton.node
 
+import exonode.clifton.Protocol._
+
 import scala.collection.immutable.HashMap
 
 /**
@@ -7,8 +9,8 @@ import scala.collection.immutable.HashMap
   */
 class AnaliserNode(actNames: List[String], graphID: String) extends Thread {
 
-  val signalSpace = SpaceCache.getSignalSpace
-  val dataSpace = SpaceCache.getDataSpace
+  private val signalSpace = SpaceCache.getSignalSpace
+  private val dataSpace = SpaceCache.getDataSpace
 
   private val numAct = actNames.length
 
@@ -21,13 +23,8 @@ class AnaliserNode(actNames: List[String], graphID: String) extends Thread {
   private var trackerTable = Set[TrackerEntry]()
   private var lastExpiryUpdate = System.currentTimeMillis()
 
-  val tmplInfo = new ExoEntry("INFO", null)
-  var tmplTable = new ExoEntry("TABLE", null)
-
-
-  val MAX_TIME = 4 * 1000
-
-  val WRITE_TIME: Long = 60 * 1000
+  val tmplInfo = new ExoEntry(INFO_MARKER, null)
+  var tmplTable = new ExoEntry(TABLE_MARKER, null)
 
   override def run(): Unit = {
 
@@ -51,11 +48,11 @@ class AnaliserNode(actNames: List[String], graphID: String) extends Thread {
       //update distribution -> analiser.actDistributionTable
 
       //SEND:
-      if (System.currentTimeMillis() - boot >= MAX_TIME) {
+      if (System.currentTimeMillis() - boot >= TABLE_UPDATE_TIME) {
         updateActDistributionTable()
         signalSpace.take(tmplTable, 0L)
         tmplTable.payload = actDistributionTable
-        signalSpace.write(tmplTable, WRITE_TIME)
+        signalSpace.write(tmplTable, TABLE_LEASE_TIME)
         boot = System.currentTimeMillis()
       }
 
@@ -65,44 +62,43 @@ class AnaliserNode(actNames: List[String], graphID: String) extends Thread {
   private var actDistributionTable: HashMap[String, (Double, Double)] = HashMap(
     {
       for {
-        entryNo <- 0 to (numAct - 1)
+        entryNo <- 0 until numAct
       } yield (actNames(entryNo), startingNQ)
-    } :+ ("@", startingAnaliserNQ): _*
+    } :+ (ANALISER_ID, startingAnaliserNQ): _*
   )
 
-
   def updateTrackerTable(newEntry: TrackerEntry): Unit = {
-    val cleanUpTable = trackerTable
-    //FIXME sub the upper line by the one bellow when, during execution,
-    // we start considering node "still alive" ping expiryTimes
-    //val cleanUpTable = cleanExpiredTrackerTable(trackerTable)
-    trackerTable = cleanUpTable.filterNot(x => x._1 == newEntry._1) + newEntry
+    //updates the table with a new entry
+    trackerTable = trackerTable.filterNot { case (id, _, _) => id == newEntry._1 } + newEntry
   }
 
-
-  def cleanExpiredTrackerTable(currentTable: Set[TrackerEntry]): Unit = {
+  def cleanExpiredTrackerTable(): Unit = {
     val currentTime = System.currentTimeMillis()
     val elapsedTime = currentTime - lastExpiryUpdate
 
-    val newTable = currentTable.map(x => (x._1, x._2, x._3 - elapsedTime / 1000))
+    val newTable = trackerTable.map { case (id, actId, expiryTime) => (id, actId, expiryTime - elapsedTime) }
+
     //cleanedTable
-    trackerTable = newTable.filter(x => x._3 < 0)
+    trackerTable = newTable.filter { case (_, _, expiryTime) => expiryTime >= 0 }
     lastExpiryUpdate = currentTime
   }
 
 
   def updateActDistributionTable(): Unit = {
-    val groupedByActivity = trackerTable.groupBy(x => x._2)
+    //Cleans the table of dead or busy nodes:
+    cleanExpiredTrackerTable()
+
+    val groupedByActivity = trackerTable.groupBy { case (_, actId, _) => actId }
     val countOfNodesByActivity: Map[String, Double] = groupedByActivity.mapValues(_.size)
     val totalNodes: Double =
-      if (trackerTable.size == 0) 1
+      if (trackerTable.isEmpty) 1
       else trackerTable.size
 
 
     val newActDistributionTable = {
       for {
-        act <- actDistributionTable
-      } yield (act._1, (act._2._1, countOfNodesByActivity.getOrElse(act._1, 0.0) / totalNodes))
+        (id, (n, q)) <- actDistributionTable
+      } yield (id, (n, countOfNodesByActivity.getOrElse(id, 0.0) / totalNodes))
     }
 
     actDistributionTable = newActDistributionTable

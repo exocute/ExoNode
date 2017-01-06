@@ -1,6 +1,8 @@
 name := "ExoNode"
 
-version := "0.1"
+organization := "growin"
+
+version := "0.2-SNAPSHOT"
 
 scalaVersion := "2.12.1"
 
