@@ -3,7 +3,6 @@ package exonode.clifton.node
 import java.io.Serializable
 
 import com.zink.fly.FlyPrime
-import exonode.clifton.nodeActors.exceptions.SpaceNotDefined
 
 /**
   * Created by #ScalaTeam on 20/12/2016.
@@ -35,7 +34,8 @@ abstract class InChannel(marker: String) {
         }
       } else TAKE_TIME = 1000
     }
-    throw new SpaceNotDefined("SignalSpace")
+    Log.error("SignalSpace not defined")
+    null
   }
 
 }

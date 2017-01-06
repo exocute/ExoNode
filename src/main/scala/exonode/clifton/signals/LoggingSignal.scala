@@ -1,5 +1,7 @@
 package exonode.clifton.signals
 
+import exonode.clifton.node.Log.{Info, LogLevel}
+
 /**
   * Created by #ScalaTeam on 20/12/2016.
   */

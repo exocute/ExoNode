@@ -1,7 +1,6 @@
 package exonode.clifton.node
 
 import com.zink.fly.FlyPrime
-import exonode.clifton.nodeActors.exceptions.SpaceNotDefined
 
 /**
   * Created by #ScalaTeam on 20/12/2016.
@@ -13,13 +12,13 @@ abstract class OutChannel(marker: String, entryLifeTime: Long = 60 * 1000) {
 
   def getSpace: FlyPrime
 
-  def putObject(obj: Serializable) = {
+  def putObject(obj: Serializable): Unit = {
     if (space != null && marker != null && obj != null) {
       out.payload = obj
       try {
         space.write(out, entryLifeTime)
       } catch {
-        case e: Exception => throw new SpaceNotDefined("Output Channel Broken")
+        case e: Exception => Log.error("Output Channel Broken")
       }
     }
   }

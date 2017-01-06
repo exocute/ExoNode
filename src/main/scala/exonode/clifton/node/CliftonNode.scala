@@ -1,11 +1,12 @@
 package exonode.clifton.node
 
+import java.io.Serializable
 import java.util.UUID
 
 import exonode.clifton.signals.{ActivitySignal, DataSignal}
 import exonode.exocuteCommon.activity.Activity
 
-import java.io.Serializable
+import scala.collection.immutable.HashMap
 import scala.util.Random
 
 /**
@@ -20,8 +21,8 @@ class CliftonNode extends Thread {
 
   private val TIME_UPDATE_ACT = 5 * 60 * 1000
   private val MIN_TIME_BEFORE_CHECK = 5 * 1000
-  private val MIN_SLEEP_TIME = 1000
-  private val MAX_SLEEP_TIME = 30 * 1000
+  private val MIN_SLEEP_TIME = 500
+  private val MAX_SLEEP_TIME = 3 * 1000
   private val MAX_TIME_DATA = 5 * 60 * 1000
 
   def getRandomActivity(table: Map[String, (Double, Double)]): String = {
@@ -63,8 +64,9 @@ class CliftonNode extends Thread {
           val tableEntry = signalSpace.read(templateTable, 0)
           if (tableEntry != null) {
             sleepTime = MIN_SLEEP_TIME
-            val table: Map[String, (Double, Double)] = tableEntry.payload.asInstanceOf
-            setActivity(getRandomActivity(table))
+            val table = tableEntry.payload.asInstanceOf[HashMap[String, (Double, Double)]]
+            val act = getRandomActivity(table)
+            setActivity(act)
           } else {
             // if nothing was found, it will sleep for a while
             Thread.sleep(sleepTime)
@@ -75,7 +77,7 @@ class CliftonNode extends Thread {
         case Some((activity, actId, activitySignal)) =>
 
           //get something to process
-          val entry = dataSpace.read(templateData, 0L)
+          val entry = dataSpace.take(templateData, 0L)
           if (entry != null) {
             //if something was found
             val dataSig = entry.payload.asInstanceOf[DataSignal]
@@ -83,6 +85,7 @@ class CliftonNode extends Thread {
             sleepTime = MIN_SLEEP_TIME
             runningSince = System.currentTimeMillis()
             val result = activity.process(dataSig.res, activitySignal.params)
+            println(actId + "- Processed " + dataSig.res + " --> " + result)
             insertNewResult(result, activitySignal, actId, dataSig.injectID)
           } else {
             // if nothing was found, it will sleep for a while
@@ -103,7 +106,7 @@ class CliftonNode extends Thread {
       if (nowTime - checkTime > MIN_TIME_BEFORE_CHECK) {
         val tableEntry = signalSpace.read(templateTable, 0)
         if (tableEntry != null) {
-          val table: Map[String, (Double, Double)] = tableEntry.payload.asInstanceOf
+          val table = tableEntry.payload.asInstanceOf[HashMap[String, (Double, Double)]]
           val (n, q) = table(actId)
           //checks if its need to update function
           if (q > n && Random.nextDouble() < (q - n) / q) {
@@ -119,7 +122,6 @@ class CliftonNode extends Thread {
     }
 
     def setActivity(activityId: String): Unit = {
-      //      val (activity: Activity, activitySignal: ActivitySignal) = {
       templateAct.marker = activityId
       val entry = signalSpace.read(templateAct, 0L)
       if (entry == null) {

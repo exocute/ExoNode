@@ -9,4 +9,6 @@ class ExoEntry(var marker: String, var payload: Serializable) {
   def this() = {
     this(null, null)
   }
+
+  override def toString: String = marker + ":" + payload
 }

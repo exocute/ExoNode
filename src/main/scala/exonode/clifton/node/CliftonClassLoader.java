@@ -1,7 +1,6 @@
 package exonode.clifton.node;
 
 import com.zink.fly.FlyPrime;
-import exonode.clifton.nodeActors.SpaceCache;
 import exonode.distributer.FlyClassEntry;
 import exonode.distributer.FlyJarEntry;
 

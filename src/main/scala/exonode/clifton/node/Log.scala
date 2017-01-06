@@ -1,5 +1,8 @@
 package exonode.clifton.node
 
+import exonode.clifton.Protocol
+import exonode.clifton.signals.LoggingSignal
+
 /**
   * Created by #ScalaTeam on 20/12/2016.
   */
@@ -18,17 +21,17 @@ object Log {
   private val log: LoggingSignal = new LoggingSignal
 
   private val TIME = 60 * 60 * 1000
-  private val outChannel: OutChannel = new SignalOutChannel("LOG", TIME)
+  private val outChannel: OutChannel = new SignalOutChannel(Protocol.LOG_MARKER, TIME)
 
-  private def sendMessage(msg: String, logLevel: LogLevel) = {
+  private def sendMessage(msg: String, logLevel: LogLevel): Unit = {
     log.setLogLevel(logLevel)
     log.setLogMessage(msg)
     outChannel.putObject(log)
   }
 
-  def info(msg: String) = sendMessage(msg, Info)
+  def info(msg: String): Unit = sendMessage(msg, Info)
 
-  def error(msg: String) = sendMessage(formatMessage(msg), Error)
+  def error(msg: String): Unit = sendMessage(formatMessage(msg), Error)
 
   private var sb = new StringBuilder
 
