@@ -14,10 +14,10 @@ class AnaliserNode(actNames: List[String], graphID: String) extends Thread {
 
   private val numAct = actNames.length
 
-  val startingNQ: (Double, Double) = (1.0 / numAct, 0)
-  val startingAnaliserNQ: (Double, Double) = (2, 0)
+  val startingQ: Int = 0
+  val startingAnaliserQ: Int = 0
 
-  //ID, ActID, expiryTime (in seconds)
+  //ID, ActID, expiryTime (in milliseconds)
   type TrackerEntry = (String, String, Long)
 
   private var trackerTable = Set[TrackerEntry]()
@@ -28,43 +28,42 @@ class AnaliserNode(actNames: List[String], graphID: String) extends Thread {
 
   override def run(): Unit = {
 
-    var boot = System.currentTimeMillis()
+    var lastUpdateTime = System.currentTimeMillis()
 
     println("Analiser Started")
 
     while (true) {
       //RECEIVE:
       //get a TrackerEntry from the signal space
-      val entry = signalSpace.take(tmplInfo, 0L)
+      val entry = signalSpace.take(tmplInfo, ENTRY_READ_TIME)
 
       //insert new TrackEntry -> ex: analiser.updateTrackerTable(("ID6", "C", 1))
       if (entry != null) {
         val info = entry.payload.asInstanceOf[TrackerEntry]
         updateTrackerTable(info)
-      }
-      else {
-        Thread.sleep(1000)
+      } else {
+        Thread.sleep(ANALISER_SLEEP_TIME)
       }
       //update distribution -> analiser.actDistributionTable
 
       //SEND:
-      if (System.currentTimeMillis() - boot >= TABLE_UPDATE_TIME) {
+      if (System.currentTimeMillis() - lastUpdateTime >= TABLE_UPDATE_TIME) {
         updateActDistributionTable()
         signalSpace.take(tmplTable, 0L)
         tmplTable.payload = actDistributionTable
         signalSpace.write(tmplTable, TABLE_LEASE_TIME)
-        boot = System.currentTimeMillis()
+        lastUpdateTime = System.currentTimeMillis()
       }
 
     }
   }
 
-  private var actDistributionTable: HashMap[String, (Double, Double)] = HashMap(
+  private var actDistributionTable: TableType = HashMap(
     {
       for {
         entryNo <- 0 until numAct
-      } yield (actNames(entryNo), startingNQ)
-    } :+ (ANALISER_ID, startingAnaliserNQ): _*
+      } yield (actNames(entryNo), startingQ)
+    } :+ (ANALISER_ACT_ID, startingAnaliserQ): _*
   )
 
   def updateTrackerTable(newEntry: TrackerEntry): Unit = {
@@ -83,25 +82,24 @@ class AnaliserNode(actNames: List[String], graphID: String) extends Thread {
     lastExpiryUpdate = currentTime
   }
 
-
   def updateActDistributionTable(): Unit = {
     //Cleans the table of dead or busy nodes:
     cleanExpiredTrackerTable()
 
     val groupedByActivity = trackerTable.groupBy { case (_, actId, _) => actId }
-    val countOfNodesByActivity: Map[String, Double] = groupedByActivity.mapValues(_.size)
-    val totalNodes: Double =
+    val countOfNodesByActivity: Map[String, Int] = groupedByActivity.mapValues(_.size)
+    val totalNodes: Int =
       if (trackerTable.isEmpty) 1
       else trackerTable.size
 
-
     val newActDistributionTable = {
       for {
-        (id, (n, q)) <- actDistributionTable
-      } yield (id, (n, countOfNodesByActivity.getOrElse(id, 0.0) / totalNodes))
+        (id, _) <- actDistributionTable
+      } yield (id, countOfNodesByActivity.getOrElse(id, 0))
     }
 
     actDistributionTable = newActDistributionTable
+    println(actDistributionTable)
   }
 
 }

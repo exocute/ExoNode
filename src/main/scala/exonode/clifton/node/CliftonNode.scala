@@ -3,8 +3,9 @@ package exonode.clifton.node
 import java.io.Serializable
 import java.util.UUID
 
+import exonode.clifton.Protocol
 import exonode.clifton.Protocol._
-import exonode.clifton.signals.{ActivitySignal, DataSignal}
+import exonode.clifton.signals.ActivitySignal
 import exonode.exocuteCommon.activity.Activity
 
 import scala.collection.immutable.HashMap
@@ -20,23 +21,11 @@ class CliftonNode extends Thread {
   private val signalSpace = SpaceCache.getSignalSpace
   private val dataSpace = SpaceCache.getDataSpace
 
-  def getRandomActivity(table: Map[String, (Double, Double)]): String = {
-    val rnd = Random.nextDouble()
-    val list = table.toList.filterNot(_._1 == "@")
-
-    def find(l: List[(String, (Double, Double))], acc: Double): String = {
-      l match {
-        case Nil => list.last._1
-        case (s, (n, _)) :: tail =>
-          if (acc + n > rnd)
-            s
-          else
-            find(tail, acc + n)
-      }
-    }
-
-    find(list, 0.0)
-  }
+  //templates to search in space
+  val templateAct = new ExoEntry("", null)
+  val templateTable = new ExoEntry(TABLE_MARKER, null)
+  var templateData: DataEntry = new DataEntry
+  val templateUpdateAct = new ExoEntry(INFO_MARKER, null) // (idNode: String, idAct: String, valid: Long)
 
   override def run(): Unit = {
 
@@ -44,12 +33,6 @@ class CliftonNode extends Thread {
 
     //current worker definitions
     var worker: Option[(Activity, String, ActivitySignal)] = None
-
-    //templates to search in space
-    val templateAct = new ExoEntry("", null)
-    val templateTable = new ExoEntry(TABLE_MARKER, null)
-    val templateData = new ExoEntry("", null)
-    val templaceUpdateAct = new ExoEntry(INFO_MARKER, null) // (idNode: String, idAct: String, valid: Long)
 
     //times initializer
     var idleTime = System.currentTimeMillis()
@@ -64,7 +47,7 @@ class CliftonNode extends Thread {
           val tableEntry = signalSpace.read(templateTable, ENTRY_READ_TIME)
           if (tableEntry != null) {
             sleepTime = NODE_MIN_SLEEP_TIME
-            val table = tableEntry.payload.asInstanceOf[HashMap[String, (Double, Double)]]
+            val table = tableEntry.payload.asInstanceOf[TableType]
             val act = getRandomActivity(table)
             setActivity(act)
           } else {
@@ -77,16 +60,16 @@ class CliftonNode extends Thread {
         case Some((activity, actId, activitySignal)) =>
 
           //get something to process
-          val entry = dataSpace.take(templateData, ENTRY_READ_TIME)
-          if (entry != null) {
+          val dataEntry = dataSpace.take(templateData, ENTRY_READ_TIME)
+          if (dataEntry != null) {
             //if something was found
-            val dataSig = entry.payload.asInstanceOf[DataSignal]
             idleTime = 0
             sleepTime = NODE_MIN_SLEEP_TIME
             runningSince = System.currentTimeMillis()
-            val result = activity.process(dataSig.res, activitySignal.params)
-            println(actId + "- Processed " + dataSig.res + " --> " + result)
-            insertNewResult(result, activitySignal, actId, dataSig.injectID)
+            Log.info(s"Node $nodeId($actId) started to process")
+            val result = activity.process(dataEntry.data, activitySignal.params)
+            insertNewResult(result, activitySignal, actId, dataEntry.injectId)
+            Log.info(s"Node $nodeId($actId) finished to process in ${System.currentTimeMillis() - runningSince}")
           } else {
             // if nothing was found, it will sleep for a while
             Thread.sleep(sleepTime)
@@ -94,7 +77,7 @@ class CliftonNode extends Thread {
           }
 
           //update space with current function
-          signalSpace.write(templaceUpdateAct, NODE_INFO_LEASE_TIME)
+          signalSpace.write(templateUpdateAct, NODE_INFO_LEASE_TIME)
 
           //checks if its need to change mode
           transformNode(actId)
@@ -106,13 +89,18 @@ class CliftonNode extends Thread {
       if (nowTime - checkTime > NODE_CHECK_TABLE_TIME) {
         val tableEntry = signalSpace.read(templateTable, ENTRY_READ_TIME)
         if (tableEntry != null) {
-          val table = tableEntry.payload.asInstanceOf[HashMap[String, (Double, Double)]]
-          val (n, q) = table(actId)
+          val table = tableEntry.payload.asInstanceOf[TableType]
+          val totalNodes = table.values.sum
+          val n = 1.0 / (table.size - 1)
+          val q = table(actId).toDouble / totalNodes
+          val uw = 1.0 / totalNodes
           //checks if its need to update function
           if (q > n && Random.nextDouble() < (q - n) / q) {
             //should i transform
             val newAct = getRandomActivity(table)
-            if (newAct != actId) {
+            val qnew = table(newAct).toDouble / totalNodes
+            //            println(q, qnew, uw, n, q - uw >= n, qnew + uw <= n)
+            if (newAct != actId && (q - uw >= n || qnew + uw <= n)) {
               setActivity(newAct)
             }
           }
@@ -121,29 +109,46 @@ class CliftonNode extends Thread {
       }
     }
 
+    def getRandomActivity(table: TableType): String = {
+      val filteredList: List[TableEntryType] = table.toList.filterNot(_._1 == ANALISER_ACT_ID)
+      val total = filteredList.unzip._2.sum
+      val n = 1.0 / filteredList.size
+      val list: List[TableEntryType] = filteredList.filter(_._2.toDouble / total < n)
+
+      if (list.isEmpty)
+        filteredList(Random.nextInt(filteredList.size))._1
+      else
+        list(Random.nextInt(list.size))._1
+    }
+
     def setActivity(activityId: String): Unit = {
       templateAct.marker = activityId
       val entry = signalSpace.read(templateAct, ENTRY_READ_TIME)
       if (entry == null) {
-        Log.error("Unknown Activity: " + activityId)
+        Log.error("Activity not found in JarSpace: " + activityId)
+        Thread.sleep(Protocol.ACT_NOT_FOUND_SLEEP_TIME)
       } else entry.payload match {
         case activitySignal: ActivitySignal =>
           ActivityCache.getActivity(activitySignal.name) match {
             case Some(activity) =>
-              templaceUpdateAct.payload = (nodeId, activityId, NODE_INFO_EXPIRY_TIME)
-              templateData.marker = activityId
+              templateUpdateAct.payload = (nodeId, activityId, NODE_INFO_EXPIRY_TIME)
+              templateData = templateData.setTo(activityId)
+              Log.info(s"Node $nodeId changed from " +
+                s"${if (worker.isDefined) worker.get._2 else Protocol.UNDEFINED_ACT_ID} to $activityId")
               worker = Some(activity, activityId, activitySignal)
-            case None => Log.error("Activity not found in JarSpace: " + activitySignal.name)
+            case None =>
+              Log.error("Class could not be loaded: " + activitySignal.name)
+              Thread.sleep(Protocol.ACT_NOT_FOUND_SLEEP_TIME)
           }
       }
     }
 
     def insertNewResult(result: Serializable, actSig: ActivitySignal, actId: String, injId: String) = {
-      val to = actSig.outMarkers.head
-      val tmplInsert = new ExoEntry(to, DataSignal(to, actId, result, injId))
-      dataSpace.write(tmplInsert, DATA_LEASE_TIME)
+      for (to <- actSig.outMarkers) {
+        val tmplInsert = new DataEntry(to, actId, injId, result)
+        dataSpace.write(tmplInsert, DATA_LEASE_TIME)
+      }
     }
-
   }
 
 }
