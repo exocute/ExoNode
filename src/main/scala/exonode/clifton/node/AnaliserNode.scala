@@ -7,21 +7,19 @@ import scala.collection.immutable.HashMap
 /**
   * Created by #ScalaTeam on 05/01/2017.
   */
-class AnaliserNode(actNames: List[String], graphID: String) extends Thread {
+class AnaliserNode(actNames: List[String], graphId: String) extends Thread {
 
   private val signalSpace = SpaceCache.getSignalSpace
   private val dataSpace = SpaceCache.getDataSpace
 
   private val numAct = actNames.length
 
-  val startingQ: Int = 0
-  val startingAnaliserQ: Int = 0
-
   //ID, ActID, expiryTime (in milliseconds)
   type TrackerEntry = (String, String, Long)
 
   private var trackerTable = Set[TrackerEntry]()
   private var lastExpiryUpdate = System.currentTimeMillis()
+  private var receivedInfos = false
 
   val tmplInfo = new ExoEntry(INFO_MARKER, null)
   var tmplTable = new ExoEntry(TABLE_MARKER, null)
@@ -48,27 +46,30 @@ class AnaliserNode(actNames: List[String], graphID: String) extends Thread {
 
       //SEND:
       if (System.currentTimeMillis() - lastUpdateTime >= TABLE_UPDATE_TIME) {
-        updateActDistributionTable()
+        if (receivedInfos) {
+          updateActDistributionTable()
+          receivedInfos = false
+        }
+        println(actDistributionTable)
         signalSpace.take(tmplTable, 0L)
         tmplTable.payload = actDistributionTable
         signalSpace.write(tmplTable, TABLE_LEASE_TIME)
         lastUpdateTime = System.currentTimeMillis()
       }
-
     }
   }
 
-  private var actDistributionTable: TableType = HashMap(
-    {
-      for {
-        entryNo <- 0 until numAct
-      } yield (actNames(entryNo), startingQ)
-    } :+ (ANALISER_ACT_ID, startingAnaliserQ): _*
-  )
+  private var actDistributionTable: TableType = {
+    for {
+      entryNo <- 0 until numAct
+    } yield (actNames(entryNo), 0)
+  } :+ (ANALISER_ACT_ID, 0)
+
 
   def updateTrackerTable(newEntry: TrackerEntry): Unit = {
     //updates the table with a new entry
     trackerTable = trackerTable.filterNot { case (id, _, _) => id == newEntry._1 } + newEntry
+    receivedInfos = true
   }
 
   def cleanExpiredTrackerTable(): Unit = {
@@ -88,18 +89,26 @@ class AnaliserNode(actNames: List[String], graphID: String) extends Thread {
 
     val groupedByActivity = trackerTable.groupBy { case (_, actId, _) => actId }
     val countOfNodesByActivity: Map[String, Int] = groupedByActivity.mapValues(_.size)
-    val totalNodes: Int =
-      if (trackerTable.isEmpty) 1
-      else trackerTable.size
+//    println( ( trackerTable.groupBy(_._2).mapValues(_.size) + ( ("@", actDistributionTable.getOrElse("@",0) ) ) ) )
 
     val newActDistributionTable = {
       for {
-        (id, _) <- actDistributionTable
-      } yield (id, countOfNodesByActivity.getOrElse(id, 0))
+        (id, q) <- actDistributionTable
+      } yield (id, countOfNodesByActivity.getOrElse(id, 0) )
     }
 
     actDistributionTable = newActDistributionTable
-    println(actDistributionTable)
+
+//    actDistributionTable = trackerTable.groupBy(_._2).mapValues(_.size) +
+//      ((ANALISER_ACT_ID, actDistributionTable.getOrElse(ANALISER_ACT_ID, 0)))
+  }
+
+  implicit def mapToHashMap[A, B](map: Map[A, B]): HashMap[A, B] = {
+    HashMap(map.toSeq: _*)
+  }
+
+  implicit def seqToHashMap[A, B](seq: Seq[(A, B)]): HashMap[A, B] = {
+    HashMap(seq: _*)
   }
 
 }

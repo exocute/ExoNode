@@ -1,6 +1,6 @@
 package exonode.clifton.node
 
-import exonode.clifton.Protocol
+import exonode.clifton.Protocol._
 import exonode.clifton.signals.LoggingSignal
 
 /**
@@ -18,26 +18,25 @@ object Log {
     override def toString: String = "ERROR"
   }
 
-  private val log: LoggingSignal = new LoggingSignal
+//  private val outChannel: OutChannel = new SignalOutChannel(Protocol.LOG_MARKER, Protocol.LOG_LEASE_TIME)
 
-  private val outChannel: OutChannel = new SignalOutChannel(Protocol.LOG_MARKER, Protocol.LOG_LEASE_TIME)
+  private val space = SpaceCache.getSignalSpace
 
   private def sendMessage(msg: String, logLevel: LogLevel): Unit = {
+    val log = new LoggingSignal
     log.setLogLevel(logLevel)
     log.setLogMessage(msg)
-    outChannel.putObject(log)
+    space.write(new ExoEntry(LOG_MARKER, log), LOG_LEASE_TIME)
   }
 
   def info(msg: String): Unit = sendMessage(msg, Info)
 
   def error(msg: String): Unit = sendMessage(formatMessage(msg), Error)
 
-  private var sb = new StringBuilder
-
   private def formatMessage(msg: String) = {
     // check an exception and catch the resulting stuff
     val stack = new Throwable().getStackTrace
-    sb.clear()
+    val sb = new StringBuilder
     val callerTrace = stack(3)
     sb.append(callerTrace.getClassName)
     sb.append(":")

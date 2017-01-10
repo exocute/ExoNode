@@ -11,4 +11,8 @@ class DataEntry(val toAct: String, val fromAct: String, val injectId: String, va
 
   def setTo(newToAct: String): DataEntry = new DataEntry(newToAct, fromAct, injectId, data)
 
+  def setFrom(newFromAct: String): DataEntry = new DataEntry(toAct, newFromAct, injectId, data)
+
+  def setInjectId(newInjectId: String): DataEntry = new DataEntry(toAct, fromAct, newInjectId, data)
+
 }

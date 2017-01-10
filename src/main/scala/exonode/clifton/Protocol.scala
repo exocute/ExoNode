@@ -32,12 +32,11 @@ object Protocol {
   val ACT_SIGNAL_LEASE_TIME: Long = 24L * 60 * 60 * 1000
 
   // check space for updates
-  val NODE_INFO_UPDATE_TIME: Long = 30L * 1000
   val TABLE_UPDATE_TIME: Long = 2L * 1000
   val NODE_CHECK_TABLE_TIME: Long = 30L * 1000
 
   // other times
-  val NODE_INFO_EXPIRY_TIME: Long = NODE_INFO_UPDATE_TIME * 2
+  val NODE_INFO_EXPIRY_TIME: Long = NODE_CHECK_TABLE_TIME * 2
   val NODE_MIN_SLEEP_TIME: Long = 500L
   val NODE_MAX_SLEEP_TIME: Long = 3L * 1000
   val ACT_NOT_FOUND_SLEEP_TIME: Long = 30L * 1000
