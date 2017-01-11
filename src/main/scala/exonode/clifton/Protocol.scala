@@ -24,7 +24,7 @@ object Protocol {
   val ENTRY_READ_TIME = 0L
 
   // Lease times
-  val NODE_INFO_LEASE_TIME: Long = 5L * 60 * 1000
+  val NODE_INFO_LEASE_TIME: Long = 60L * 1000
   val DATA_LEASE_TIME: Long = 1L * 60 * 60 * 1000
   val LOG_LEASE_TIME: Long = 1L * 60 * 60 * 1000
   val TABLE_LEASE_TIME: Long = 60L * 1000

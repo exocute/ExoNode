@@ -7,12 +7,12 @@ import scala.collection.immutable.HashMap
 /**
   * Created by #ScalaTeam on 05/01/2017.
   */
-class AnaliserNode(actNames: List[String], graphId: String) extends Thread {
+class AnaliserNode(tab: TableType) {
 
   private val signalSpace = SpaceCache.getSignalSpace
   private val dataSpace = SpaceCache.getDataSpace
 
-  private val numAct = actNames.length
+  private val numAct = tab.size-1
 
   //ID, ActID, expiryTime (in milliseconds)
   type TrackerEntry = (String, String, Long)
@@ -24,11 +24,22 @@ class AnaliserNode(actNames: List[String], graphId: String) extends Thread {
   val tmplInfo = new ExoEntry(INFO_MARKER, null)
   var tmplTable = new ExoEntry(TABLE_MARKER, null)
 
-  override def run(): Unit = {
+  private var actDistributionTable: TableType = {
+    for {
+      (entryNo,_) <- tab
+      if entryNo != ANALISER_ACT_ID
+    } yield (entryNo, 0)
+  } + (ANALISER_ACT_ID -> 1)
+
+
+  def startAnalising(): Unit = {
 
     var lastUpdateTime = System.currentTimeMillis()
 
     println("Analiser Started")
+
+    tmplTable.payload = actDistributionTable
+    signalSpace.write(tmplTable, TABLE_LEASE_TIME)
 
     while (true) {
       //RECEIVE:
@@ -59,12 +70,6 @@ class AnaliserNode(actNames: List[String], graphId: String) extends Thread {
     }
   }
 
-  private var actDistributionTable: TableType = {
-    for {
-      entryNo <- 0 until numAct
-    } yield (actNames(entryNo), 0)
-  } :+ (ANALISER_ACT_ID, 0)
-
 
   def updateTrackerTable(newEntry: TrackerEntry): Unit = {
     //updates the table with a new entry
@@ -88,19 +93,20 @@ class AnaliserNode(actNames: List[String], graphId: String) extends Thread {
     cleanExpiredTrackerTable()
 
     val groupedByActivity = trackerTable.groupBy { case (_, actId, _) => actId }
-    val countOfNodesByActivity: Map[String, Int] = groupedByActivity.mapValues(_.size)
-//    println( ( trackerTable.groupBy(_._2).mapValues(_.size) + ( ("@", actDistributionTable.getOrElse("@",0) ) ) ) )
+    val countOfNodesByActivity: Map[String, Int] = groupedByActivity.mapValues(_.size).
+      +((ANALISER_ACT_ID, actDistributionTable.getOrElse(ANALISER_ACT_ID, 0)))
+    //    println( ( trackerTable.groupBy(_._2).mapValues(_.size) + ( ("@", actDistributionTable.getOrElse("@",0) ) ) ) )
 
     val newActDistributionTable = {
       for {
         (id, q) <- actDistributionTable
-      } yield (id, countOfNodesByActivity.getOrElse(id, 0) )
+      } yield (id, countOfNodesByActivity.getOrElse(id, 0))
     }
 
     actDistributionTable = newActDistributionTable
 
-//    actDistributionTable = trackerTable.groupBy(_._2).mapValues(_.size) +
-//      ((ANALISER_ACT_ID, actDistributionTable.getOrElse(ANALISER_ACT_ID, 0)))
+    //    actDistributionTable = trackerTable.groupBy(_._2).mapValues(_.size) +
+    //      ((ANALISER_ACT_ID, actDistributionTable.getOrElse(ANALISER_ACT_ID, 0)))
   }
 
   implicit def mapToHashMap[A, B](map: Map[A, B]): HashMap[A, B] = {

@@ -3,7 +3,6 @@ package exonode.clifton.node
 import java.io.Serializable
 import java.util.UUID
 
-import exonode.clifton.Protocol
 import exonode.clifton.Protocol._
 import exonode.clifton.signals.ActivitySignal
 import exonode.exocuteCommon.activity.Activity
@@ -34,6 +33,13 @@ class CliftonNode extends Thread {
     signalSpace.write(templateUpdateAct, NODE_INFO_LEASE_TIME)
   }
 
+  def hasAnaliser(tab: TableType): Boolean = {
+    tab.get(ANALISER_ACT_ID) match {
+      case Some(x) => x != 0
+      case None => true
+    }
+  }
+
   override def run(): Unit = {
 
     //    val bootTime = System.currentTimeMillis()
@@ -56,11 +62,22 @@ class CliftonNode extends Thread {
         case NoWork =>
           val tableEntry = signalSpace.read(templateTable, ENTRY_READ_TIME)
           if (tableEntry != null) {
-            sleepTime = NODE_MIN_SLEEP_TIME
-            val table = tableEntry.payload.asInstanceOf[TableType]
-            val act = getRandomActivity(table)
-            setActivity(act)
-            updateNodeInfo()
+            if (!hasAnaliser(tableEntry.payload.asInstanceOf[TableType])) {
+              val tabEntry = signalSpace.take(templateTable, 0L)
+              if (tabEntry != null) {
+                val tab = tabEntry.payload.asInstanceOf[TableType]
+                if (!hasAnaliser(tab))
+                  new AnaliserNode(tab).startAnalising()
+                else
+                  signalSpace.write(tableEntry, TABLE_LEASE_TIME)
+              }
+            } else {
+              sleepTime = NODE_MIN_SLEEP_TIME
+              val table = tableEntry.payload.asInstanceOf[TableType]
+              val act = getRandomActivity(table)
+              setActivity(act)
+              updateNodeInfo()
+            }
           } else {
             // if nothing was found, it will sleep for a while
             Thread.sleep(sleepTime)
@@ -237,7 +254,7 @@ class CliftonNode extends Thread {
       val entry = signalSpace.read(templateAct, ENTRY_READ_TIME)
       if (entry == null) {
         Log.error("Activity not found in JarSpace: " + activityId)
-        Thread.sleep(Protocol.ACT_NOT_FOUND_SLEEP_TIME)
+        Thread.sleep(ACT_NOT_FOUND_SLEEP_TIME)
       } else entry.payload match {
         case activitySignal: ActivitySignal =>
           ActivityCache.getActivity(activitySignal.name) match {
@@ -245,7 +262,7 @@ class CliftonNode extends Thread {
               templateUpdateAct.payload = (nodeId, activityId, NODE_INFO_EXPIRY_TIME)
               templateData = new DataEntry().setTo(activityId)
               val activityWorker = new ActivityWorker(activityId, activity, activitySignal.params)
-              val fromId = if (worker.hasWork) worker.activity.id else Protocol.UNDEFINED_ACT_ID
+              val fromId = if (worker.hasWork) worker.activity.id else UNDEFINED_ACT_ID
               activitySignal.inMarkers match {
                 case Vector(singleAct) =>
                   worker = PipeWork(activityWorker, activitySignal.outMarkers)
@@ -255,7 +272,7 @@ class CliftonNode extends Thread {
               Log.info(s"Node $nodeId changed from $fromId to $activityId")
             case None =>
               Log.error("Class could not be loaded: " + activitySignal.name)
-              Thread.sleep(Protocol.ACT_NOT_FOUND_SLEEP_TIME)
+              Thread.sleep(ACT_NOT_FOUND_SLEEP_TIME)
           }
       }
     }
