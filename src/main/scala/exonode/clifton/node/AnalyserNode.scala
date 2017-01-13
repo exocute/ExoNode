@@ -7,14 +7,16 @@ import exonode.clifton.Protocol._
 
 import scala.collection.immutable.HashMap
 import scala.language.implicitConversions
+import scala.collection.JavaConverters._
 
 /**
   * Created by #ScalaTeam on 05/01/2017.
   */
-class AnaliserNode(nodeId: String, tab: TableType) {
+class AnalyserNode(nodeId: String, tab: TableType) {
+
+  private val MAX_INFO_CALL = 20
 
   private val signalSpace = SpaceCache.getSignalSpace
-  private val dataSpace = SpaceCache.getDataSpace
 
   private val numAct = tab.size - 1
 
@@ -31,16 +33,16 @@ class AnaliserNode(nodeId: String, tab: TableType) {
   private var actDistributionTable: TableType = {
     for {
       (entryNo, _) <- tab
-      if entryNo != ANALISER_ACT_ID
+      if entryNo != ANALYSER_ACT_ID
     } yield (entryNo, 0)
-  } + (ANALISER_ACT_ID -> 1)
+  } + (ANALYSER_ACT_ID -> 1)
 
 
-  def startAnalising(): Unit = {
+  def startAnalysing(): Unit = {
 
     var lastUpdateTime = System.currentTimeMillis()
 
-    val bootMessage = s"Analiser node $nodeId started"
+    val bootMessage = s"Analyser node $nodeId started"
     println(bootMessage)
     Log.info(bootMessage)
 
@@ -50,16 +52,17 @@ class AnaliserNode(nodeId: String, tab: TableType) {
     while (true) {
       //RECEIVE:
       //get a TrackerEntry from the signal space
-      val entry = signalSpace.take(tmplInfo, ENTRY_READ_TIME)
+      val infoEntries = signalSpace.takeMany(tmplInfo, MAX_INFO_CALL).asScala
 
       //insert new TrackEntry -> ex: analiser.updateTrackerTable(("ID6", "C", 1))
-      if (entry != null) {
-        val info = entry.payload.asInstanceOf[TrackerEntry]
-        updateTrackerTable(info)
+      if (infoEntries.nonEmpty) {
+        for (entry <- infoEntries) {
+          val info = entry.payload.asInstanceOf[TrackerEntry]
+          updateTrackerTable(info)
+        }
       } else {
-        Thread.sleep(ANALISER_SLEEP_TIME)
+        Thread.sleep(ANALYSER_SLEEP_TIME)
       }
-      //update distribution -> analiser.actDistributionTable
 
       //SEND:
       if (System.currentTimeMillis() - lastUpdateTime >= TABLE_UPDATE_TIME) {
@@ -100,7 +103,7 @@ class AnaliserNode(nodeId: String, tab: TableType) {
 
     val groupedByActivity = trackerTable.groupBy { case (_, actId, _) => actId }
     val countOfNodesByActivity: Map[String, Int] = groupedByActivity.mapValues(_.size).
-      +((ANALISER_ACT_ID, actDistributionTable.getOrElse(ANALISER_ACT_ID, 0)))
+      +((ANALYSER_ACT_ID, actDistributionTable.getOrElse(ANALYSER_ACT_ID, 0)))
     //    println( ( trackerTable.groupBy(_._2).mapValues(_.size) + ( ("@", actDistributionTable.getOrElse("@",0) ) ) ) )
 
     val newActDistributionTable = {
@@ -112,7 +115,7 @@ class AnaliserNode(nodeId: String, tab: TableType) {
     actDistributionTable = newActDistributionTable
 
     //    actDistributionTable = trackerTable.groupBy(_._2).mapValues(_.size) +
-    //      ((ANALISER_ACT_ID, actDistributionTable.getOrElse(ANALISER_ACT_ID, 0)))
+    //      ((ANALYSER_ACT_ID, actDistributionTable.getOrElse(ANALYSER_ACT_ID, 0)))
   }
 
   implicit def mapToHashMap[A, B](map: Map[A, B]): HashMap[A, B] = {

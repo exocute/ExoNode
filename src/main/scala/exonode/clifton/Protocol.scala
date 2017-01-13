@@ -15,7 +15,7 @@ object Protocol {
   val INJECT_SIGNAL_MARKER = ">"
   val COLLECT_SIGNAL_MARKER = "<"
 
-  val ANALISER_ACT_ID = "@"
+  val ANALYSER_ACT_ID = "@"
   val UNDEFINED_ACT_ID = "?"
 
   type TableType = HashMap[String, Int]
@@ -41,7 +41,7 @@ object Protocol {
   val NODE_MIN_SLEEP_TIME: Long = 500L
   val NODE_MAX_SLEEP_TIME: Long = 3L * 1000
   val ACT_NOT_FOUND_SLEEP_TIME: Long = 30L * 1000
-  val ANALISER_SLEEP_TIME: Long = 1L * 1000
+  val ANALYSER_SLEEP_TIME: Long = 1L * 1000
   val INITIAL_TABLE_LEASE_TIME: Long = TABLE_LEASE_TIME * 2
   val GRP_CHECKER_TABLE_TIMEOUT: Long = 90L * 1000
   val GRP_CHECKER_SLEEP_TIME: Long = 30L * 1000

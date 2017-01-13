@@ -17,7 +17,6 @@ class CliftonNode extends Thread {
 
   private val nodeId: String = UUID.randomUUID().toString
 
-
   private val signalSpace = SpaceCache.getSignalSpace
   private val dataSpace = SpaceCache.getDataSpace
 
@@ -30,14 +29,14 @@ class CliftonNode extends Thread {
   val templateMySignals = new ExoEntry(nodeId, null)
   val templateNodeSignals = new ExoEntry(NODE_SIGNAL_MARKER, null)
 
-  def updateNodeInfo() = {
+  def updateNodeInfo(): Unit = {
     //update space with current function
     signalSpace.write(templateUpdateAct, NODE_INFO_LEASE_TIME)
   }
 
-  def hasAnaliser(tab: TableType): Boolean = {
-    tab.get(ANALISER_ACT_ID) match {
-      case Some(x) => x != 0
+  def hasAnalyser(tab: TableType): Boolean = {
+    tab.get(ANALYSER_ACT_ID) match {
+      case Some(analyserCount) => analyserCount != 0
       case None => true
     }
   }
@@ -54,7 +53,7 @@ class CliftonNode extends Thread {
 
     //times initializer
     //    var idleTime = System.currentTimeMillis()
-    var runningSince = 0L
+//    var runningSince = 0L
     var sleepTime = NODE_MIN_SLEEP_TIME
     var checkTime = System.currentTimeMillis()
     var killWhenIdle = false
@@ -133,16 +132,16 @@ class CliftonNode extends Thread {
     }
 
     def tryToBeAnaliser(tableEntry: ExoEntry): Boolean = {
-      if (!hasAnaliser(tableEntry.payload.asInstanceOf[TableType])) {
+      if (!hasAnalyser(tableEntry.payload.asInstanceOf[TableType])) {
         val tabEntry = signalSpace.take(templateTable, ENTRY_READ_TIME)
         if (tabEntry != null) {
           val tab = tabEntry.payload.asInstanceOf[TableType]
-          if (!hasAnaliser(tab)) {
+          if (!hasAnalyser(tab)) {
             val analiserThread = new Thread with BusyWorking {
               override def threadIsBusy = true
 
               override def run(): Unit = {
-                new AnaliserNode(nodeId, tab).startAnalising()
+                new AnalyserNode(nodeId, tab).startAnalysing()
               }
             }
             analiserThread.start()
@@ -252,7 +251,7 @@ class CliftonNode extends Thread {
         try {
           waitQueue.poll(1000, TimeUnit.MILLISECONDS)
         } catch {
-          case e: InterruptedException =>
+          case _: InterruptedException =>
             // thread finished processing
             // So, back to normal mode
         }
@@ -314,7 +313,7 @@ class CliftonNode extends Thread {
     }
 
     def getRandomActivity(table: TableType): String = {
-      val filteredList: List[TableEntryType] = table.toList.filterNot(_._1 == ANALISER_ACT_ID)
+      val filteredList: List[TableEntryType] = table.toList.filterNot(_._1 == ANALYSER_ACT_ID)
       val total = filteredList.unzip._2.sum
       val n = 1.0 / filteredList.size
       val list: List[TableEntryType] = filteredList.filter(_._2.toDouble / total < n)
@@ -340,9 +339,9 @@ class CliftonNode extends Thread {
               val activityWorker = new ActivityWorker(activityId, activity, activitySignal.params)
               val fromId = if (worker.hasWork) worker.activity.id else UNDEFINED_ACT_ID
               activitySignal.inMarkers match {
-                case Vector(singleAct) =>
+                case Vector(_) =>
                   worker = PipeWork(activityWorker, activitySignal.outMarkers)
-                case actFrom =>
+                case actFrom: Vector[String] =>
                   worker = JoinWork(activityWorker, actFrom, activitySignal.outMarkers)
               }
               Log.info(s"Node $nodeId changed from $fromId to $activityId")
@@ -404,7 +403,7 @@ class CliftonNode extends Thread {
       println(s"Node $nodeId(${activity.id}) Result " + result)
     }
 
-    def insertNewResult(result: Serializable, actId: String, injId: String, actsTo: Vector[String]) = {
+    def insertNewResult(result: Serializable, actId: String, injId: String, actsTo: Vector[String]): Unit = {
       for (actTo <- actsTo) {
         val dataEntry = new DataEntry(actTo, actId, injId, result)
         dataSpace.write(dataEntry, DATA_LEASE_TIME)
