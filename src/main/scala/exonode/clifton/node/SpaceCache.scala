@@ -1,6 +1,6 @@
 package exonode.clifton.node
 
-import com.zink.fly.FlyPrime
+import com.zink.fly.Fly
 import com.zink.fly.kit.{FlyFactory, FlyFinder}
 
 import scala.collection.mutable
@@ -13,13 +13,13 @@ object SpaceCache {
   private val data = "DataSpace"
   private val jar = "JarSpace"
   private val signal = "SignalSpace"
-  private val spaceMap = new mutable.HashMap[String, FlyPrime]()
+  private val spaceMap = new mutable.HashMap[String, Fly]()
 
-  var signalHost: String = ""
-  var jarHost: String = ""
-  var dataHost: String = ""
+  var signalHost: String = "localhost"
+  var jarHost: String = "localhost"
+  var dataHost: String = "localhost"
 
-  private def getSpace(tag: String, host: String): FlyPrime = {
+  private def getSpace(tag: String, host: String): Fly = {
     spaceMap.get(tag) match {
       case Some(space) => space
       case None => {
@@ -39,9 +39,9 @@ object SpaceCache {
     }
   }
 
-  def getSignalSpace: FlyPrime = getSpace(signal, signalHost)
+  def getSignalSpace: Fly = getSpace(signal, signalHost)
 
-  def getDataSpace: FlyPrime = getSpace(data, dataHost)
+  def getDataSpace: Fly = getSpace(data, dataHost)
 
-  def getJarSpace: FlyPrime = getSpace(jar, jarHost)
+  def getJarSpace: Fly = getSpace(jar, jarHost)
 }

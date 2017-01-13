@@ -4,12 +4,11 @@ import java.io.Serializable
 import java.util.UUID
 
 import exonode.clifton.Protocol._
-import exonode.clifton.signals.ActivitySignal
+import exonode.clifton.signals.{ActivitySignal, KillGracefullSignal, KillSignal, NodeSignal}
 import exonode.exocuteCommon.activity.Activity
 
-import scala.collection.immutable.HashMap
-import scala.concurrent.Future
-import scala.util.{Random, Try}
+import scala.util.Random
+import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 
 /**
   * Created by #ScalaTeam on 05-01-2017.
@@ -26,7 +25,10 @@ class CliftonNode extends Thread {
   val templateAct = new ExoEntry("", null)
   val templateTable = new ExoEntry(TABLE_MARKER, null)
   var templateData: DataEntry = new DataEntry
-  val templateUpdateAct = new ExoEntry(INFO_MARKER, null) // (idNode: String, idAct: String, valid: Long)
+  val templateUpdateAct = new ExoEntry(INFO_MARKER, null)
+  // (idNode: String, idAct: String, valid: Long)
+  val templateMySignals = new ExoEntry(nodeId, null)
+  val templateNodeSignals = new ExoEntry(NODE_SIGNAL_MARKER, null)
 
   def updateNodeInfo() = {
     //update space with current function
@@ -40,38 +42,38 @@ class CliftonNode extends Thread {
     }
   }
 
+
   override def run(): Unit = {
 
     //    val bootTime = System.currentTimeMillis()
 
     //current worker definitions
     var worker: Work = NoWork
-    var processing: Option[Future[Try[Unit]]] = None
+    var processing: Option[BusyWorking] = None
+    var waitQueue: BlockingQueue[Unit] = new LinkedBlockingQueue[Unit]()
 
     //times initializer
     //    var idleTime = System.currentTimeMillis()
     var runningSince = 0L
     var sleepTime = NODE_MIN_SLEEP_TIME
     var checkTime = System.currentTimeMillis()
+    var killWhenIdle = false
 
     println(s"Node $nodeId is ready to start")
     Log.info(s"Node $nodeId is ready to start")
     while (true) {
+      handleSignals()
+
+      if (killWhenIdle) {
+        killOwnSignal()
+      }
+
       worker match {
         // worker is not defined yet
         case NoWork =>
           val tableEntry = signalSpace.read(templateTable, ENTRY_READ_TIME)
           if (tableEntry != null) {
-            if (!hasAnaliser(tableEntry.payload.asInstanceOf[TableType])) {
-              val tabEntry = signalSpace.take(templateTable, 0L)
-              if (tabEntry != null) {
-                val tab = tabEntry.payload.asInstanceOf[TableType]
-                if (!hasAnaliser(tab))
-                  new AnaliserNode(tab).startAnalising()
-                else
-                  signalSpace.write(tableEntry, TABLE_LEASE_TIME)
-              }
-            } else {
+            if (!tryToBeAnaliser(tableEntry)) {
               sleepTime = NODE_MIN_SLEEP_TIME
               val table = tableEntry.payload.asInstanceOf[TableType]
               val act = getRandomActivity(table)
@@ -86,7 +88,6 @@ class CliftonNode extends Thread {
 
         //worker is a join
         case JoinWork(activity, actsFrom, actsTo) =>
-
           if (tryToReadAll(Random.shuffle(actsFrom))) {
             tryToTakeAll(actsFrom) match {
               case Vector() =>
@@ -131,6 +132,64 @@ class CliftonNode extends Thread {
       }
     }
 
+    def tryToBeAnaliser(tableEntry: ExoEntry): Boolean = {
+      if (!hasAnaliser(tableEntry.payload.asInstanceOf[TableType])) {
+        val tabEntry = signalSpace.take(templateTable, ENTRY_READ_TIME)
+        if (tabEntry != null) {
+          val tab = tabEntry.payload.asInstanceOf[TableType]
+          if (!hasAnaliser(tab)) {
+            val analiserThread = new Thread with BusyWorking {
+              override def threadIsBusy = true
+
+              override def run(): Unit = {
+                new AnaliserNode(nodeId, tab).startAnalising()
+              }
+            }
+            analiserThread.start()
+            processing = Some(analiserThread)
+            return true
+          } else
+            signalSpace.write(tableEntry, TABLE_LEASE_TIME)
+        }
+      }
+      false
+    }
+
+    def handleSignals(): Unit = {
+      val mySignalEntry = signalSpace.take(templateMySignals, ENTRY_READ_TIME)
+      if (mySignalEntry != null) {
+        val mySignal = mySignalEntry.payload.asInstanceOf[NodeSignal]
+        processSignal(mySignal)
+      }
+      val nodeSignalEntry = signalSpace.take(templateNodeSignals, ENTRY_READ_TIME)
+      if (nodeSignalEntry != null) {
+        val nodeSignal = nodeSignalEntry.payload.asInstanceOf[NodeSignal]
+        processSignal(nodeSignal)
+      }
+    }
+
+    def killOwnSignal(): Unit = {
+      Log.info(s"Node $nodeId is going to shutdown")
+      processing match {
+        case Some(thread: Thread) => while (true) thread.interrupt()
+        case _ => ()
+      }
+      while (true) Thread.currentThread().interrupt()
+    }
+
+    def processSignal(nodeSignal: NodeSignal) = {
+      nodeSignal match {
+        case KillSignal => killOwnSignal()
+        case KillGracefullSignal =>
+          killWhenIdle = true
+        //            processing match {
+        //              case Some(future) =>
+        //              //                processing = Some(future andThen { case _ => killOwnSignal() })
+        //              case None => killOwnSignal()
+        //            }
+      }
+    }
+
     def tryToReadAll(actsFrom: Vector[String]): Boolean = {
       def tryToReadAllAux(index: Int): Boolean = {
         if (index >= actsFrom.size)
@@ -167,68 +226,85 @@ class CliftonNode extends Thread {
           if (dataEntry == null) {
             acc // if acc.size > 0 then some error happened
           } else {
-            println(s"Node $nodeId take ${dataEntry.injectId} from ${dataEntry.fromAct}")
             tryToTakeAllAux(index + 1, acc :+ dataEntry)
           }
         }
       }
 
-      //      templateData = templateData.setInjectId(injectId)
-      println(s"Node $nodeId started to take")
       tryToTakeAllAux(0, Vector())
     }
 
-    //    def process(dataEntry: DataEntry, activity: ActivityWorker, actsTo: Vector[String]) = {
-    //      runningSince = System.currentTimeMillis()
-    //      Log.info(s"Node $nodeId(${activity.id}) started to process")
-    //      try {
-    //        val result = activity.process(dataEntry.data)
-    //        Log.info(s"Node $nodeId(${activity.id}) finished to process in ${System.currentTimeMillis() - runningSince}")
-    //        insertNewResult(result, activity.id, dataEntry.injectId, actsTo)
-    //      } catch {
-    //        case e: Throwable =>
-    //          Log.error(s"Node $nodeId(${activity.id}) thrown an error: ${e.getMessage}")
-    //      }
-    //    }
-
     def process(dataEntry: Vector[DataEntry], activity: ActivityWorker, actsTo: Vector[String]) = {
-      val input: Vector[Serializable] = dataEntry.map(_.data)
-      runningSince = System.currentTimeMillis()
-      Log.info(s"Node $nodeId(${activity.id}) started to process")
-      try {
-        val result = {
-          if (input.size == 1)
-            activity.process(input.head)
-          else
-            activity.process(input)
-        }
-        Log.info(s"Node $nodeId(${activity.id}) finished to process in ${System.currentTimeMillis() - runningSince}ms")
-        insertNewResult(result, activity.id, dataEntry.head.injectId, actsTo)
-        println(s"Node $nodeId(${activity.id}) Result " + result)
-      } catch {
-        case e: Throwable =>
-          Log.error(s"Node $nodeId(${activity.id}) thrown an error: ${e.getMessage}")
+      val thread = processing match {
+        case Some(workerThread: Worker) =>
+          workerThread.sendInput(dataEntry)
+          workerThread
+        case _ =>
+          val workerThread = new WorkerThread(activity, actsTo, waitQueue)
+          workerThread.start()
+          processing = Some(workerThread)
+          workerThread.sendInput(dataEntry)
+          workerThread
       }
+
+      while (thread.threadIsBusy) {
+        handleSignals()
+        try {
+          waitQueue.poll(1000, TimeUnit.MILLISECONDS)
+        } catch {
+          case e: InterruptedException =>
+            // thread finished processing
+            // So, back to normal mode
+        }
+      }
+
+      //        val thread: Thread = new Thread(() => {
+      //          val input: Vector[Serializable] = dataEntry.map(_.data)
+      //          runningSince = System.currentTimeMillis()
+      //          Log.info(s"Node $nodeId(${activity.id}) started processing")
+      //
+      //          val result = {
+      //            if (input.size == 1)
+      //              activity.process(input.head)
+      //            else
+      //              activity.process(input)
+      //          }
+      //          Log.info(s"Node $nodeId(${activity.id}) finished processing in ${System.currentTimeMillis() - runningSince}ms")
+      //          insertNewResult(result, activity.id, dataEntry.head.injectId, actsTo)
+      //          println(s"Node $nodeId(${activity.id}) Result " + result)
+      //        })
+      //        processing = Some(thread)
+      //        future.onComplete { result =>
+      //          result match {
+      //            case Success(_) =>
+      //            case Failure(e) =>
+      //              Log.error(s"Node $nodeId(${activity.id}) thrown an error: ${e.getMessage}")
+      //          }
+      //          processing = None
+      //        }
     }
 
     def checkNeedToChange(actId: String) = {
+      //        println(s"Node $nodeId($actId) is still alive")
       val nowTime = System.currentTimeMillis()
       if (nowTime - checkTime > NODE_CHECK_TABLE_TIME) {
         val tableEntry = signalSpace.read(templateTable, ENTRY_READ_TIME)
         if (tableEntry != null) {
-          val table = tableEntry.payload.asInstanceOf[TableType]
-          val totalNodes = table.values.sum
-          val n = 1.0 / (table.size - 1)
-          val q = table(actId).toDouble / totalNodes
-          val uw = 1.0 / totalNodes
-          //checks if its need to update function
-          if (q > n && Random.nextDouble() < (q - n) / q) {
-            //should i transform
-            val newAct = getRandomActivity(table)
-            val qnew = table(newAct).toDouble / totalNodes
-            //            println(q, qnew, uw, n, q - uw >= n, qnew + uw <= n)
-            if (newAct != actId && (q - uw >= n || qnew + uw <= n)) {
-              setActivity(newAct)
+          if (!tryToBeAnaliser(tableEntry)) {
+            val table = tableEntry.payload.asInstanceOf[TableType]
+            val totalNodes = table.values.sum
+            val n = 1.0 / (table.size - 1)
+            val q = table(actId).toDouble / totalNodes
+            val uw = 1.0 / totalNodes
+            //checks if its need to update function
+            if (q > n && Random.nextDouble() < (q - n) / q) {
+              //should i transform
+              val newAct = getRandomActivity(table)
+              val qnew = table(newAct).toDouble / totalNodes
+              //            println(q, qnew, uw, n, q - uw >= n, qnew + uw <= n)
+              if (newAct != actId && (q - uw >= n || qnew + uw <= n)) {
+                setActivity(newAct)
+              }
             }
           }
         }
@@ -276,6 +352,57 @@ class CliftonNode extends Thread {
           }
       }
     }
+  }
+
+  trait BusyWorking {
+    def threadIsBusy: Boolean
+  }
+
+  trait Worker {
+    def sendInput(input: Vector[DataEntry]): Unit
+  }
+
+  class WorkerThread(activity: ActivityWorker, actsTo: Vector[String], callback: BlockingQueue[Unit]) extends Thread with Worker with BusyWorking {
+
+    val queue: BlockingQueue[Vector[DataEntry]] = new LinkedBlockingQueue[Vector[DataEntry]]()
+    var isProcessing = false
+
+    override def threadIsBusy: Boolean = isProcessing
+
+    override def sendInput(input: Vector[DataEntry]): Unit = queue.add(input)
+
+    override def run(): Unit = {
+      try {
+        while (true) {
+          val input = queue.take()
+          isProcessing = true
+          process(input)
+          isProcessing = false
+          callback.add(())
+        }
+      } catch {
+        case e: InterruptedException =>
+          println("InterruptedException: " + e.getMessage)
+        case e: Throwable =>
+          println("Message: " + e.getMessage)
+      }
+    }
+
+    def process(dataEntry: Vector[DataEntry]): Unit = {
+      val input: Vector[Serializable] = dataEntry.map(_.data)
+      val runningSince = System.currentTimeMillis()
+      Log.info(s"Node $nodeId(${activity.id}) started processing")
+
+      val result = {
+        if (input.size == 1)
+          activity.process(input.head)
+        else
+          activity.process(input)
+      }
+      Log.info(s"Node $nodeId(${activity.id}) finished processing in ${System.currentTimeMillis() - runningSince}ms")
+      insertNewResult(result, activity.id, dataEntry.head.injectId, actsTo)
+      println(s"Node $nodeId(${activity.id}) Result " + result)
+    }
 
     def insertNewResult(result: Serializable, actId: String, injId: String, actsTo: Vector[String]) = {
       for (actTo <- actsTo) {
@@ -283,30 +410,32 @@ class CliftonNode extends Thread {
         dataSpace.write(dataEntry, DATA_LEASE_TIME)
       }
     }
+
   }
 
-}
+  class ActivityWorker(val id: String, activity: Activity, params: Vector[String]) {
+    @inline def process(input: Serializable): Serializable = activity.process(input, params)
+  }
 
-class ActivityWorker(val id: String, activity: Activity, params: Vector[String]) {
-  @inline def process(input: Serializable): Serializable = activity.process(input, params)
-}
 
-sealed trait Work {
-  def hasWork: Boolean
+  sealed trait Work {
+    def hasWork: Boolean
 
-  def activity: ActivityWorker
-}
+    def activity: ActivityWorker
+  }
 
-case object NoWork extends Work {
-  override def hasWork = false
+  case object NoWork extends Work {
+    override def hasWork = false
 
-  override def activity = throw new NoSuchElementException("NoWork.activity")
-}
+    override def activity = throw new NoSuchElementException("NoWork.activity")
+  }
 
-case class PipeWork(activity: ActivityWorker, actsTo: Vector[String]) extends Work {
-  override def hasWork = true
-}
+  case class PipeWork(activity: ActivityWorker, actsTo: Vector[String]) extends Work {
+    override def hasWork = true
+  }
 
-case class JoinWork(activity: ActivityWorker, actsFrom: Vector[String], actsTo: Vector[String]) extends Work {
-  override def hasWork = true
+  case class JoinWork(activity: ActivityWorker, actsFrom: Vector[String], actsTo: Vector[String]) extends Work {
+    override def hasWork = true
+  }
+
 }

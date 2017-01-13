@@ -1,18 +1,22 @@
 package exonode.clifton.node
 
+import java.text.SimpleDateFormat
+import java.util.Date
+
 import exonode.clifton.Protocol._
 
 import scala.collection.immutable.HashMap
+import scala.language.implicitConversions
 
 /**
   * Created by #ScalaTeam on 05/01/2017.
   */
-class AnaliserNode(tab: TableType) {
+class AnaliserNode(nodeId: String, tab: TableType) {
 
   private val signalSpace = SpaceCache.getSignalSpace
   private val dataSpace = SpaceCache.getDataSpace
 
-  private val numAct = tab.size-1
+  private val numAct = tab.size - 1
 
   //ID, ActID, expiryTime (in milliseconds)
   type TrackerEntry = (String, String, Long)
@@ -26,7 +30,7 @@ class AnaliserNode(tab: TableType) {
 
   private var actDistributionTable: TableType = {
     for {
-      (entryNo,_) <- tab
+      (entryNo, _) <- tab
       if entryNo != ANALISER_ACT_ID
     } yield (entryNo, 0)
   } + (ANALISER_ACT_ID -> 1)
@@ -36,7 +40,9 @@ class AnaliserNode(tab: TableType) {
 
     var lastUpdateTime = System.currentTimeMillis()
 
-    println("Analiser Started")
+    val bootMessage = s"Analiser node $nodeId started"
+    println(bootMessage)
+    Log.info(bootMessage)
 
     tmplTable.payload = actDistributionTable
     signalSpace.write(tmplTable, TABLE_LEASE_TIME)
@@ -61,7 +67,7 @@ class AnaliserNode(tab: TableType) {
           updateActDistributionTable()
           receivedInfos = false
         }
-        println(actDistributionTable)
+        println(new SimpleDateFormat("HH:mm:ss").format(new Date()) + ": " + actDistributionTable)
         signalSpace.take(tmplTable, 0L)
         tmplTable.payload = actDistributionTable
         signalSpace.write(tmplTable, TABLE_LEASE_TIME)

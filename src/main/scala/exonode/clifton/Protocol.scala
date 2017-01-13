@@ -10,6 +10,7 @@ object Protocol {
   val LOG_MARKER = "LOG"
   val INFO_MARKER = "INFO"
   val TABLE_MARKER = "TABLE"
+  val NODE_SIGNAL_MARKER = "NODE"
 
   val INJECT_SIGNAL_MARKER = ">"
   val COLLECT_SIGNAL_MARKER = "<"
@@ -41,6 +42,9 @@ object Protocol {
   val NODE_MAX_SLEEP_TIME: Long = 3L * 1000
   val ACT_NOT_FOUND_SLEEP_TIME: Long = 30L * 1000
   val ANALISER_SLEEP_TIME: Long = 1L * 1000
+  val INITIAL_TABLE_LEASE_TIME: Long = TABLE_LEASE_TIME * 2
+  val GRP_CHECKER_TABLE_TIMEOUT: Long = 90L * 1000
+  val GRP_CHECKER_SLEEP_TIME: Long = 30L * 1000
 
 }
 

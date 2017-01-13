@@ -1,6 +1,6 @@
 package exonode.clifton.node;
 
-import com.zink.fly.FlyPrime;
+import com.zink.fly.Fly;
 import exonode.distributer.FlyClassEntry;
 import exonode.distributer.FlyJarEntry;
 
@@ -15,10 +15,7 @@ public class CliftonClassLoader extends ClassLoader {
 
     public HashMap<String, byte[]> classByteCodes = new HashMap<String, byte[]>();
 
-    //private static String flyHost;
-
-    //private static final String TAG = "JarSpace";
-    private static FlyPrime space;
+    private static Fly space;
 
     public CliftonClassLoader() {
         super(CliftonClassLoader.class.getClassLoader());
@@ -126,7 +123,7 @@ public class CliftonClassLoader extends ClassLoader {
     }
 
     public final Class findClass(String name) throws ClassNotFoundException {
-        System.out.println("looking for :" + name);
+//        System.out.println("looking for :" + name);
         if (!classByteCodes.containsKey(name)) {
             byte[] b = getJarFromSpace(name);
             if (b != null) {
