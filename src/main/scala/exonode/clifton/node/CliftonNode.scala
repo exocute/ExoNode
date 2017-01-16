@@ -153,6 +153,10 @@ class CliftonNode extends Thread {
             }
             analiserThread.start()
             processing = Some(analiserThread)
+            while(true){
+              handleSignals()
+              Thread.sleep(ANALYSER_SLEEP_TIME)
+            }
             return true
           } else
             signalSpace.write(tableEntry, TABLE_LEASE_TIME)
@@ -306,7 +310,6 @@ class CliftonNode extends Thread {
               //should i transform
               val newAct = getRandomActivity(table)
               val qnew = table(newAct).toDouble / totalNodes
-              //            println(q, qnew, uw, n, q - uw >= n, qnew + uw <= n)
               if (newAct != actId && (q - uw >= n || qnew + uw <= n)) {
                 setActivity(newAct)
               }
@@ -406,6 +409,7 @@ class CliftonNode extends Thread {
           println("InterruptedException: " + e.getMessage)
         case e: Throwable =>
           println("Message: " + e.getMessage)
+          Log.error("Message: " + e.getMessage)
       }
     }
 
@@ -422,7 +426,7 @@ class CliftonNode extends Thread {
       }
       Log.info(s"Node $nodeId(${activity.id}) finished processing in ${System.currentTimeMillis() - runningSince}ms")
       insertNewResult(result, activity.id, dataEntry.head.injectId, actsTo)
-      println(s"Node $nodeId(${activity.id}) Result " + result)
+      println(s"Node $nodeId(${activity.id}) Result " + result.toString.take(5)+"...")
     }
 
     def insertNewResult(result: Serializable, actId: String, injId: String, actsTo: Vector[String]): Unit = {
