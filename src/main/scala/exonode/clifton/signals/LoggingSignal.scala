@@ -4,6 +4,8 @@ import exonode.clifton.node.Log.{Info, LogLevel}
 
 /**
   * Created by #ScalaTeam on 20/12/2016.
+  *
+  * Transports the information of  a log message
   */
 class LoggingSignal(private var logMessage: String, private var logLevel: LogLevel = Info) extends Serializable {
 
