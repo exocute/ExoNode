@@ -221,7 +221,7 @@ class CliftonNode extends Thread {
         for(act <- 1 until actsFrom.size) {
           val dataEntry = dataSpace.read(templateData.setFrom(actsFrom(act)), ENTRY_READ_TIME)
           if (dataEntry == null)
-            false
+            return false
         }
         true
       }
