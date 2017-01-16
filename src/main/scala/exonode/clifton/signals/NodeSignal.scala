@@ -4,21 +4,11 @@ package exonode.clifton.signals
   * Created by #ScalaTeam on 30-12-2016.
   */
 
-/*
-  BOOT,
-  ACTIVITY_SIGNAL,
-  LOG_SIGNAL,
-  KILL_SIGNAL,
-  FIRST_JOB,
-  CONSECUTIVE_JOB,
-  BUSY_PROCESSING,
-  ACTIVITY_TIMEOUT,
-  NODE_TIMEOUT,
-  NODE_DEAD
-*/
-
 trait NodeSignal
 
+//if a nodes receives a KillSignal immediately aborts and die
 case object KillSignal extends NodeSignal
 
+
+//if a node receives a KillGracefullSignal waits if something are being processed and then aborts
 case object KillGracefullSignal extends NodeSignal

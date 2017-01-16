@@ -2,6 +2,8 @@ package exonode.clifton.signals
 
 /**
   * Created by #ScalaTeam on 20-12-2016.
+  *
+  * It allows to save in the space the graph representation
   */
 class ActivitySignal(var name: String, var params: Vector[String], var inMarkers: Vector[String], var outMarkers: Vector[String]) extends Serializable {
 

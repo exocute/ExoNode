@@ -2,6 +2,9 @@ package exonode.clifton.node
 
 /**
   * Created by #ScalaTeam on 05/01/2017.
+  *
+  * User interface that allows users to start nodes
+  * All the spaces can be defined, if they are not defined default parameters are set to localhost
   */
 object StartExoNode {
 

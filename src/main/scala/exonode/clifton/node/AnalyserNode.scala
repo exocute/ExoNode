@@ -11,9 +11,14 @@ import scala.collection.JavaConverters._
 
 /**
   * Created by #ScalaTeam on 05/01/2017.
+  *
+  * AnalyserNode is responsible for updating the space with a table of how many nodes
+  * are processing some activity. Analyser Node it's one of the modes of what a clifton node
+  * can be transformed.
   */
 class AnalyserNode(nodeId: String, tab: TableType) {
 
+  //the number of entries to be taken from space from defined time
   private val MAX_INFO_CALL = 20
 
   private val signalSpace = SpaceCache.getSignalSpace
@@ -30,6 +35,8 @@ class AnalyserNode(nodeId: String, tab: TableType) {
   val tmplInfo = new ExoEntry(INFO_MARKER, null)
   var tmplTable = new ExoEntry(TABLE_MARKER, null)
 
+
+  //takes the first tabble from space and updates the Analyser_Act_ID to 1
   private var actDistributionTable: TableType = {
     for {
       (entryNo, _) <- tab
@@ -86,6 +93,9 @@ class AnalyserNode(nodeId: String, tab: TableType) {
     receivedInfos = true
   }
 
+  /**
+    * Cleans the expired info from table
+    */
   def cleanExpiredTrackerTable(): Unit = {
     val currentTime = System.currentTimeMillis()
     val elapsedTime = currentTime - lastExpiryUpdate

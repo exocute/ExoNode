@@ -5,6 +5,9 @@ import exonode.clifton.signals.LoggingSignal
 
 /**
   * Created by #ScalaTeam on 20/12/2016.
+  *
+  * responsible for updating the log file with most relevant info
+  * it allows two different writes INFO and ERROR
   */
 object Log {
 

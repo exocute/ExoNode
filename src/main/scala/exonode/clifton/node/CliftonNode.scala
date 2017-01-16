@@ -12,6 +12,11 @@ import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 
 /**
   * Created by #ScalaTeam on 05-01-2017.
+  *
+  * Generic node. Nodes are responsible for processing activities or analyse some INFOs from the space
+  * CliftonNode has two main modes: Analyser or Worker
+  * Analyser is responsible for updating the space with a table about the state of every node
+  * Worker is responsible for processing input for some activity
   */
 class CliftonNode extends Thread {
 
@@ -44,16 +49,12 @@ class CliftonNode extends Thread {
 
   override def run(): Unit = {
 
-    //    val bootTime = System.currentTimeMillis()
-
     //current worker definitions
     var worker: Work = NoWork
     var processing: Option[BusyWorking] = None
     var waitQueue: BlockingQueue[Unit] = new LinkedBlockingQueue[Unit]()
 
     //times initializer
-    //    var idleTime = System.currentTimeMillis()
-//    var runningSince = 0L
     var sleepTime = NODE_MIN_SLEEP_TIME
     var checkTime = System.currentTimeMillis()
     var killWhenIdle = false
@@ -95,7 +96,6 @@ class CliftonNode extends Thread {
               case values: Vector[DataEntry] =>
                 if (values.size == actsFrom.size) {
                   // we have all values, so we can continue
-                  //                  idleTime = 0
                   sleepTime = NODE_MIN_SLEEP_TIME
                   process(values, activity, actsTo)
                 } else {
@@ -117,7 +117,6 @@ class CliftonNode extends Thread {
           val dataEntry = dataSpace.take(templateData, ENTRY_READ_TIME)
           if (dataEntry != null) {
             //if something was found
-            //            idleTime = 0
             sleepTime = NODE_MIN_SLEEP_TIME
             process(Vector(dataEntry), activity, actsTo)
           } else {
@@ -131,6 +130,14 @@ class CliftonNode extends Thread {
       }
     }
 
+    /**
+      * Receives and tableEntry and checks if the position where analyser node is defined has zero
+      * If true, tries to take the table from the space and if it gets it, starts the analyser mode
+      * Once analyser mode is started the table is updated in space with the info that already exists
+      * one clifton node in analyser mode
+      * @param tableEntry
+      * @return true if it was transformed in analyser node, false otherwise
+      */
     def tryToBeAnaliser(tableEntry: ExoEntry): Boolean = {
       if (!hasAnalyser(tableEntry.payload.asInstanceOf[TableType])) {
         val tabEntry = signalSpace.take(templateTable, ENTRY_READ_TIME)
@@ -154,6 +161,10 @@ class CliftonNode extends Thread {
       false
     }
 
+    /**
+      * Reads signals from the space that be general to every node or specific to some node with
+      * a defined ID
+      */
     def handleSignals(): Unit = {
       val mySignalEntry = signalSpace.take(templateMySignals, ENTRY_READ_TIME)
       if (mySignalEntry != null) {
@@ -167,42 +178,39 @@ class CliftonNode extends Thread {
       }
     }
 
+    /**
+      * kills the current node
+      */
     def killOwnSignal(): Unit = {
       Log.info(s"Node $nodeId is going to shutdown")
       processing match {
+          // no more work(processing activities) is done
         case Some(thread: Thread) => while (true) thread.interrupt()
         case _ => ()
       }
+      //aborts the current node
       while (true) Thread.currentThread().interrupt()
     }
 
+    /**
+      * if its a KillSignal the node immediately aborts and dies, if its a KillGraceFullSignal
+      * killWhenIdle is changed to true and before receiving something new to process the node dies
+      * @param nodeSignal
+      */
     def processSignal(nodeSignal: NodeSignal) = {
       nodeSignal match {
         case KillSignal => killOwnSignal()
         case KillGracefullSignal =>
           killWhenIdle = true
-        //            processing match {
-        //              case Some(future) =>
-        //              //                processing = Some(future andThen { case _ => killOwnSignal() })
-        //              case None => killOwnSignal()
-        //            }
       }
     }
 
+    /**
+      * try to read all the results of an injectID that should do a Join
+      * @param actsFrom
+      * @return true if both activities of the join are already present in the space
+      */
     def tryToReadAll(actsFrom: Vector[String]): Boolean = {
-      def tryToReadAllAux(index: Int): Boolean = {
-        if (index >= actsFrom.size)
-          true
-        else {
-          val from = actsFrom(index)
-          val dataEntry = dataSpace.read(templateData.setFrom(from), ENTRY_READ_TIME)
-          if (dataEntry == null) {
-            false
-          } else {
-            tryToReadAllAux(index + 1)
-          }
-        }
-      }
 
       val from = actsFrom(0)
       val dataEntry = dataSpace.read(templateData.setFrom(from).setInjectId(null), ENTRY_READ_TIME)
@@ -210,11 +218,23 @@ class CliftonNode extends Thread {
         false
       } else {
         templateData = templateData.setInjectId(dataEntry.injectId)
-        tryToReadAllAux(1)
+        for(act <- 1 until actsFrom.size) {
+          val dataEntry = dataSpace.read(templateData.setFrom(actsFrom(act)), ENTRY_READ_TIME)
+          if (dataEntry == null)
+            false
+        }
+        true
       }
     }
 
-    def tryToTakeAll(actsFrom: Vector[String] /*, injectId: String*/): Vector[DataEntry] = {
+    /**
+      * try to read all the results of an injectID that should do a Join
+      * @param actsFrom
+      * @return if both activities of the join was successfully taken from the space it returns
+      *         a vector with them
+      */
+    def tryToTakeAll(actsFrom: Vector[String]): Vector[DataEntry] = {
+
       def tryToTakeAllAux(index: Int, acc: Vector[DataEntry]): Vector[DataEntry] = {
         if (index >= actsFrom.size) {
           acc
@@ -233,6 +253,13 @@ class CliftonNode extends Thread {
       tryToTakeAllAux(0, Vector())
     }
 
+    /**
+      * if a worker is already defined we send the input to be processed
+      * else, a new thread is created and then the input is send
+      * @param dataEntry
+      * @param activity
+      * @param actsTo
+      */
     def process(dataEntry: Vector[DataEntry], activity: ActivityWorker, actsTo: Vector[String]) = {
       val thread = processing match {
         case Some(workerThread: Worker) =>
@@ -256,39 +283,18 @@ class CliftonNode extends Thread {
             // So, back to normal mode
         }
       }
-
-      //        val thread: Thread = new Thread(() => {
-      //          val input: Vector[Serializable] = dataEntry.map(_.data)
-      //          runningSince = System.currentTimeMillis()
-      //          Log.info(s"Node $nodeId(${activity.id}) started processing")
-      //
-      //          val result = {
-      //            if (input.size == 1)
-      //              activity.process(input.head)
-      //            else
-      //              activity.process(input)
-      //          }
-      //          Log.info(s"Node $nodeId(${activity.id}) finished processing in ${System.currentTimeMillis() - runningSince}ms")
-      //          insertNewResult(result, activity.id, dataEntry.head.injectId, actsTo)
-      //          println(s"Node $nodeId(${activity.id}) Result " + result)
-      //        })
-      //        processing = Some(thread)
-      //        future.onComplete { result =>
-      //          result match {
-      //            case Success(_) =>
-      //            case Failure(e) =>
-      //              Log.error(s"Node $nodeId(${activity.id}) thrown an error: ${e.getMessage}")
-      //          }
-      //          processing = None
-      //        }
     }
 
+    /**
+      * checks in period of time if change its needed
+      * @param actId
+      */
     def checkNeedToChange(actId: String) = {
-      //        println(s"Node $nodeId($actId) is still alive")
       val nowTime = System.currentTimeMillis()
       if (nowTime - checkTime > NODE_CHECK_TABLE_TIME) {
         val tableEntry = signalSpace.read(templateTable, ENTRY_READ_TIME)
         if (tableEntry != null) {
+          //first checks is a table already contains an analyser
           if (!tryToBeAnaliser(tableEntry)) {
             val table = tableEntry.payload.asInstanceOf[TableType]
             val totalNodes = table.values.sum
@@ -312,6 +318,10 @@ class CliftonNode extends Thread {
       }
     }
 
+    /**
+      * @param table
+      * @return returns a random act_id taken from the table
+      */
     def getRandomActivity(table: TableType): String = {
       val filteredList: List[TableEntryType] = table.toList.filterNot(_._1 == ANALYSER_ACT_ID)
       val total = filteredList.unzip._2.sum
@@ -324,6 +334,11 @@ class CliftonNode extends Thread {
         list(Random.nextInt(list.size))._1
     }
 
+    /**
+      * sets the node to process input to a specific activity
+      * updates the templates and worker
+      * @param activityId
+      */
     def setActivity(activityId: String): Unit = {
       templateAct.marker = activityId
       val entry = signalSpace.read(templateAct, ENTRY_READ_TIME)
@@ -361,6 +376,13 @@ class CliftonNode extends Thread {
     def sendInput(input: Vector[DataEntry]): Unit
   }
 
+  /**
+    * this thread is continually running till be shutdown
+    * it process the input at the same that allows the node to handle signals
+    * @param activity
+    * @param actsTo
+    * @param callback
+    */
   class WorkerThread(activity: ActivityWorker, actsTo: Vector[String], callback: BlockingQueue[Unit]) extends Thread with Worker with BusyWorking {
 
     val queue: BlockingQueue[Vector[DataEntry]] = new LinkedBlockingQueue[Vector[DataEntry]]()

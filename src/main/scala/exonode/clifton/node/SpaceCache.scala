@@ -7,6 +7,13 @@ import scala.collection.mutable
 
 /**
   * Created by #ScalaTeam on 20/12/2016.
+  *
+  * Default parameters are set to LocalHost but can be changed
+  *
+  * SignalSpace => saves the graphRepresentation, Log infos, nodes info
+  * DataSpace => saves the result of all activities
+  * JarSpace => saves FlyClassEntry and FlyJarEntry of all jars
+  *
   */
 object SpaceCache {
 
@@ -19,6 +26,13 @@ object SpaceCache {
   var jarHost: String = "localhost"
   var dataHost: String = "localhost"
 
+
+  /**
+    * finds a flyspace by the host defined
+    * @param tag
+    * @param host
+    * @return if its found returns the flyspace on Host
+    */
   private def getSpace(tag: String, host: String): Fly = {
     spaceMap.get(tag) match {
       case Some(space) => space

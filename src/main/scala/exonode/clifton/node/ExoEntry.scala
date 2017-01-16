@@ -4,6 +4,8 @@ import java.io.Serializable
 
 /**
   * Created by #ScalaTeam on 20/12/2016.
+  *
+  * Generic Entry
   */
 class ExoEntry(var marker: String, var payload: Serializable) {
   def this() = {

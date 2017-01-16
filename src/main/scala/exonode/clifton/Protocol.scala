@@ -3,7 +3,7 @@ package exonode.clifton
 import scala.collection.immutable.HashMap
 
 /**
-  * Created by #ScalaTeam on 02-01-2017.
+  * Created by #ScalaTeam on 02-01-2017
   */
 object Protocol {
 

@@ -6,6 +6,8 @@ import scala.collection.mutable
 
 /**
   * Created by #ScalaTeam on 20-12-2016.
+  *
+  * Takes a activity name and finds it in the space
   */
 object ActivityCache {
 
