@@ -5,8 +5,7 @@ package exonode.distributer
   *
   * It allows us to save in space for every className the correspondent jarName
   */
-class FlyClassEntry(var className: String, var jarName: String) {
-  def this() = this("", "")
+case class FlyClassEntry(className: String, jarName: String) {
 
   override def toString: String = "Filename [" + className + "] bytes [" + jarName + "]"
 }

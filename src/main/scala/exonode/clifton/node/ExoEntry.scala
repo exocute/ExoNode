@@ -7,10 +7,11 @@ import java.io.Serializable
   *
   * Generic Entry
   */
-class ExoEntry(var marker: String, var payload: Serializable) {
-  def this() = {
-    this(null, null)
-  }
+case class ExoEntry(marker: String, payload: Serializable) {
+
+  def setMarker(newMarker: String) = ExoEntry(newMarker, payload)
+
+  def setPayload(newPayload: Serializable) = ExoEntry(marker, newPayload)
 
   override def toString: String = marker + ":" + payload
 }

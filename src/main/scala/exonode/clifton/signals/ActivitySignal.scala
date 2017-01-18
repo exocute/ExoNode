@@ -5,9 +5,9 @@ package exonode.clifton.signals
   *
   * It allows to save in the space the graph representation
   */
-class ActivitySignal(var name: String, var params: Vector[String], var inMarkers: Vector[String], var outMarkers: Vector[String]) extends Serializable {
+case class ActivitySignal(name: String, params: Vector[String], inMarkers: Vector[String], outMarkers: Vector[String]) extends Serializable {
 
-  def this() = this("", Vector[String](), Vector[String](), Vector[String]())
+  def this() = this(null, null, null, null)
 
   override def toString: String = {
     val ret = new StringBuilder(64)

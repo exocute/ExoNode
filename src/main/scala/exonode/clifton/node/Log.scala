@@ -21,15 +21,11 @@ object Log {
     override def toString: String = "ERROR"
   }
 
-//  private val outChannel: OutChannel = new SignalOutChannel(Protocol.LOG_MARKER, Protocol.LOG_LEASE_TIME)
-
   private val space = SpaceCache.getSignalSpace
 
   private def sendMessage(msg: String, logLevel: LogLevel): Unit = {
-    val log = new LoggingSignal
-    log.setLogLevel(logLevel)
-    log.setLogMessage(msg)
-    space.write(new ExoEntry(LOG_MARKER, log), LOG_LEASE_TIME)
+    val logSignal = LoggingSignal(msg, logLevel)
+    space.write(ExoEntry(LOG_MARKER, logSignal), LOG_LEASE_TIME)
   }
 
   def info(msg: String): Unit = sendMessage(msg, Info)

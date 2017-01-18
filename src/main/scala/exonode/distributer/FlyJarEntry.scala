@@ -5,8 +5,7 @@ package exonode.distributer
   *
   * It allows us to save in the space for every jarName the correspondent bytes
   */
-class FlyJarEntry(var fileName: String, var bytes: Array[Byte]) {
-  def this() = this("", null)
+case class FlyJarEntry(fileName: String, bytes: Array[Byte]) {
 
   override def toString: String = "Filename [" + fileName + "] bytes [" + bytes + "]"
 }

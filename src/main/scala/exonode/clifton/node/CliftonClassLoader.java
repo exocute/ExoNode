@@ -1,8 +1,8 @@
 package exonode.clifton.node;
 
-import com.zink.fly.Fly;
 import exonode.distributer.FlyClassEntry;
 import exonode.distributer.FlyJarEntry;
+import scala.Option;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -11,11 +11,12 @@ import java.util.HashMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarInputStream;
 
+//FIXME: write this class in scala!
 public class CliftonClassLoader extends ClassLoader {
 
     public HashMap<String, byte[]> classByteCodes = new HashMap<String, byte[]>();
 
-    private static Fly space;
+    private static FlyOption space;
 
     public CliftonClassLoader() {
         super(CliftonClassLoader.class.getClassLoader());
@@ -177,10 +178,10 @@ public class CliftonClassLoader extends ClassLoader {
 
         byte[] reply = null;
         FlyClassEntry classTmpl = new FlyClassEntry(className, null);
-        FlyClassEntry fce = space.read(classTmpl, 200);
-        if (fce != null) {
-            FlyJarEntry jarTmpl = new FlyJarEntry(fce.jarName(), null);
-            FlyJarEntry fje = space.read(jarTmpl, 0L);
+        Option<FlyClassEntry> fce = space.read(classTmpl, 200);
+        if (fce.isDefined()) {
+            FlyJarEntry jarTmpl = new FlyJarEntry(fce.get().jarName(), null);
+            FlyJarEntry fje = space.read(jarTmpl, 0L).get();
             reply = fje.bytes();
         }
         return reply;
