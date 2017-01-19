@@ -56,7 +56,7 @@ class WorkerThread(node: CliftonNode) extends Thread with Worker with BusyWorkin
     }
     Log.info(s"Node ${node.nodeId}(${activity.id}) finished processing in ${System.currentTimeMillis() - runningSince}ms")
     insertNewResult(result, activity.id, dataEntry.head.injectId, activity.acsTo)
-    println(s"Node ${node.nodeId}(${activity.id}) Result " + result.toString.take(5) + "...")
+    println(s"Node ${node.nodeId}(${activity.id}) Result " + result.toString.take(50) + "...")
   }
 
   def insertNewResult(result: Serializable, actId: String, injId: String, actsTo: Vector[String]): Unit = {

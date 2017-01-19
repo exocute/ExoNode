@@ -32,13 +32,6 @@ class CliftonNode extends Thread {
   private val templateMySignals = ExoEntry(nodeId, null)
   private val templateNodeSignals = ExoEntry(NODE_SIGNAL_MARKER, null)
 
-  /**
-    * Update the space with the current information
-    */
-  private def updateNodeInfo(): Unit = {
-    signalSpace.write(templateUpdateAct, NODE_INFO_LEASE_TIME)
-  }
-
   private def tableHasAnalyser(tab: TableType): Boolean = {
     tab.get(ANALYSER_ACT_ID) match {
       case Some(analyserCount) => analyserCount != 0
@@ -62,6 +55,7 @@ class CliftonNode extends Thread {
     //times initializer
     var sleepTime = NODE_MIN_SLEEP_TIME
     var checkTime = System.currentTimeMillis()
+    var sendInfoTime = System.currentTimeMillis()
     var killWhenIdle = false
 
     def nodeFullId: String = {
@@ -86,21 +80,39 @@ class CliftonNode extends Thread {
       }
 
       worker match {
-        // worker is not defined yet
         case NoWork =>
+          // worker is not defined yet
           doNoWork()
-        case joinWork@JoinWork(activity, _) =>
-          if (!tryToDoJoin(joinWork))
+        case work if work.hasWork =>
+          work match {
+            case joinWork@JoinWork(activity, _) =>
+              while (tryToDoJoin(joinWork)) {
+                //checks if it needs to change mode
+                checkNeedToChange(activity.id)
+              }
+            case consWork@ConsecutiveWork(activity) =>
+              while (consecutiveWork(consWork)) {
+                //checks if it needs to change mode
+                checkNeedToChange(activity.id)
+              }
+            case _ => // ignore
+          }
+          if (!checkNeedToChange(work.activity.id)) {
+            updateNodeInfo()
             sleepForAWhile()
+          }
+      }
+    }
 
-          //checks if it needs to change mode
-          checkNeedToChange(activity.id)
-        case consWork@ConsecutiveWork(activity) =>
-          if (!consecutiveWork(consWork))
-            sleepForAWhile()
-
-          //checks if it needs to change mode
-          checkNeedToChange(activity.id)
+    /**
+      * Update the space with the current information
+      */
+    def updateNodeInfo(force: Boolean = false): Unit = {
+      val currentTime = System.currentTimeMillis()
+      if (force || currentTime - sendInfoTime > NODE_CHECK_TABLE_TIME) {
+        println(s"Node $nodeFullId has updated info")
+        signalSpace.write(templateUpdateAct, NODE_INFO_LEASE_TIME)
+        sendInfoTime = currentTime
       }
     }
 
@@ -325,7 +337,7 @@ class CliftonNode extends Thread {
       *
       * @param actId
       */
-    def checkNeedToChange(actId: String): Unit = {
+    def checkNeedToChange(actId: String): Boolean = {
       val nowTime = System.currentTimeMillis()
       if (nowTime - checkTime > NODE_CHECK_TABLE_TIME) {
         signalSpace.read(templateTable, ENTRY_READ_TIME).foreach {
@@ -347,6 +359,7 @@ class CliftonNode extends Thread {
                       val qNew = filteredTable(newAct).toDouble / totalNodes
                       if (newAct != actId && (q - uw >= n || qNew + uw <= n)) {
                         setActivity(newAct)
+                        return true
                       }
                   }
                 }
@@ -354,8 +367,8 @@ class CliftonNode extends Thread {
             }
         }
         checkTime = nowTime
-        updateNodeInfo()
       }
+      false
     }
 
     /**
@@ -405,6 +418,8 @@ class CliftonNode extends Thread {
                     worker = JoinWork(activityWorker, actFrom)
                 }
                 Log.info(msg)
+                updateNodeInfo(force = true)
+                sleepTime = NODE_MIN_SLEEP_TIME
               case None =>
                 Log.error("Class could not be loaded: " + activitySignal.name)
                 Thread.sleep(ACT_NOT_FOUND_SLEEP_TIME)
