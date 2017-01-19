@@ -101,10 +101,4 @@ class ExoNodeTester extends FlatSpec {
     assert(newTable(ANALYSER_ACT_ID) == 1)
   }
 
-
-  "changeHost" should "changeHost" in {
-    SpaceCache.jarHost = "test"
-    assert(SpaceCache.jarHost.equals("test"))
-  }
-
 }
