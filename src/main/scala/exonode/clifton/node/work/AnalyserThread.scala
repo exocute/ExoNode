@@ -42,13 +42,16 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
   override def threadIsBusy = true
 
   override def run(): Unit = {
-    val trackerTable: TrackerTableType = Nil
-    val initialTable = createInitialTable()
-    val entryTable = templateTable.setPayload(initialTable)
-    signalSpace.write(entryTable, TABLE_LEASE_TIME)
-
-    val lastUpdateTime = System.currentTimeMillis()
-    readInfosFromSpace(lastUpdateTime, receivedInfos = false, trackerTable, initialTable)
+    try {
+      val trackerTable: TrackerTableType = Nil
+      val initialTable = createInitialTable()
+      val entryTable = templateTable.setPayload(initialTable)
+      signalSpace.write(entryTable, TABLE_LEASE_TIME)
+      val lastUpdateTime = System.currentTimeMillis()
+      readInfosFromSpace(lastUpdateTime, receivedInfos = false, trackerTable, initialTable)
+    } catch {
+      case _: InterruptedException =>
+    }
   }
 
   @tailrec
@@ -113,12 +116,11 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
     val countOfNodesByActivity: Map[String, Int] = groupedByActivity.mapValues(_.size).
       +((ANALYSER_ACT_ID, distributionTable.getOrElse(ANALYSER_ACT_ID, 0)))
 
-    //    println( ( trackerTable.groupBy(_._2).mapValues(_.size) + ( ("@", actDistributionTable.getOrElse("@",0) ) ) ) )
-
-    val newActDistributionTable = {
+    val newActDistributionTable = countOfNodesByActivity ++ {
       for {
         (id, _) <- distributionTable
-      } yield (id, countOfNodesByActivity.getOrElse(id, 0))
+        if countOfNodesByActivity.get(id).isEmpty
+      } yield id -> 0
     }
 
     newActDistributionTable

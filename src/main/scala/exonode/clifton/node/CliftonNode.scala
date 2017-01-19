@@ -32,6 +32,8 @@ class CliftonNode extends Thread {
   private val templateMySignals = ExoEntry(nodeId, null)
   private val templateNodeSignals = ExoEntry(NODE_SIGNAL_MARKER, null)
 
+  private class KillSignalException extends Exception
+
   private def tableHasAnalyser(tab: TableType): Boolean = {
     tab.get(ANALYSER_ACT_ID) match {
       case Some(analyserCount) => analyserCount != 0
@@ -55,7 +57,7 @@ class CliftonNode extends Thread {
     //times initializer
     var sleepTime = NODE_MIN_SLEEP_TIME
     var checkTime = System.currentTimeMillis()
-    var sendInfoTime = System.currentTimeMillis()
+    var sendInfoTime = 0L
     var killWhenIdle = false
 
     def nodeFullId: String = {
@@ -72,36 +74,39 @@ class CliftonNode extends Thread {
     val bootMessage = s"Node $nodeFullId is ready to start"
     println(bootMessage)
     Log.info(bootMessage)
-    while (true) {
-      handleSignals()
+    try {
+      while (true) {
+        handleSignals()
 
-      if (killWhenIdle) {
-        killOwnSignal()
-      }
+        if (killWhenIdle)
+          killOwnSignal()
 
-      worker match {
-        case NoWork =>
-          // worker is not defined yet
-          doNoWork()
-        case work if work.hasWork =>
-          work match {
-            case joinWork@JoinWork(activity, _) =>
-              while (tryToDoJoin(joinWork)) {
-                //checks if it needs to change mode
-                checkNeedToChange(activity.id)
-              }
-            case consWork@ConsecutiveWork(activity) =>
-              while (consecutiveWork(consWork)) {
-                //checks if it needs to change mode
-                checkNeedToChange(activity.id)
-              }
-            case _ => // ignore
-          }
-          if (!checkNeedToChange(work.activity.id)) {
-            updateNodeInfo()
-            sleepForAWhile()
-          }
+        worker match {
+          case NoWork =>
+            // worker is not defined yet
+            doNoWork()
+          case work if work.hasWork =>
+            work match {
+              case joinWork@JoinWork(activity, _) =>
+                while (tryToDoJoin(joinWork)) {
+                  //checks if it needs to change mode
+                  checkNeedToChange(activity.id)
+                }
+              case consWork@ConsecutiveWork(activity) =>
+                while (consecutiveWork(consWork)) {
+                  //checks if it needs to change mode
+                  checkNeedToChange(activity.id)
+                }
+              case _ => // ignore
+            }
+            if (!checkNeedToChange(work.activity.id)) {
+              updateNodeInfo()
+              sleepForAWhile()
+            }
+        }
       }
+    } catch {
+      case _: KillSignalException => println(s"Going to stop: $nodeFullId")
     }
 
     /**
@@ -110,7 +115,6 @@ class CliftonNode extends Thread {
     def updateNodeInfo(force: Boolean = false): Unit = {
       val currentTime = System.currentTimeMillis()
       if (force || currentTime - sendInfoTime > NODE_CHECK_TABLE_TIME) {
-        println(s"Node $nodeFullId has updated info")
         signalSpace.write(templateUpdateAct, NODE_INFO_LEASE_TIME)
         sendInfoTime = currentTime
       }
@@ -128,8 +132,13 @@ class CliftonNode extends Thread {
           val table = tableEntry.payload.asInstanceOf[TableType]
           if (!tryToBeAnalyser(table)) {
             sleepTime = NODE_MIN_SLEEP_TIME
-            getRandomActivity(filterActivities(table)).foreach(act => setActivity(act))
-            updateNodeInfo()
+            val filteredTable = filterActivities(table)
+            if (filteredTable.isEmpty) {
+              updateNodeInfo()
+              sleepForAWhile()
+            } else {
+              getRandomActivity(filteredTable).foreach(act => setActivity(act))
+            }
           }
         case None =>
           sleepForAWhile()
@@ -197,10 +206,12 @@ class CliftonNode extends Thread {
           val mySignal = mySignalEntry.payload.asInstanceOf[NodeSignal]
           processSignal(mySignal)
       }
-      signalSpace.take(templateNodeSignals, ENTRY_READ_TIME).foreach {
-        nodeSignalEntry =>
-          val nodeSignal = nodeSignalEntry.payload.asInstanceOf[NodeSignal]
-          processSignal(nodeSignal)
+      if (!killWhenIdle) {
+        signalSpace.take(templateNodeSignals, ENTRY_READ_TIME).foreach {
+          nodeSignalEntry =>
+            val nodeSignal = nodeSignalEntry.payload.asInstanceOf[NodeSignal]
+            processSignal(nodeSignal)
+        }
       }
     }
 
@@ -208,14 +219,14 @@ class CliftonNode extends Thread {
       * kills the current node
       */
     def killOwnSignal(): Unit = {
-      Log.info(s"Node $nodeFullId is going to shutdown")
+      val shutdownMsg = s"Node $nodeFullId is going to shutdown"
+      println(shutdownMsg)
+      Log.info(shutdownMsg)
       processing.foreach { thread =>
         thread.interrupt()
         thread.join()
       }
-
-      //aborts the current node
-      while (true) Thread.currentThread().interrupt()
+      throw new KillSignalException
     }
 
     /**
@@ -224,7 +235,7 @@ class CliftonNode extends Thread {
       *
       * @param nodeSignal
       */
-    def processSignal(nodeSignal: NodeSignal) = {
+    def processSignal(nodeSignal: NodeSignal): Unit = {
       nodeSignal match {
         case KillSignal => killOwnSignal()
         case KillGracefullSignal =>
