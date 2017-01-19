@@ -25,34 +25,39 @@ class CliftonNode extends Thread {
   private val dataSpace = SpaceCache.getDataSpace
 
   //templates to search in spaces
-  var templateAct = ExoEntry("", null)
-  val templateTable = ExoEntry(TABLE_MARKER, null)
-  var templateData: DataEntry = DataEntry(null, null, null, null)
-  var templateUpdateAct = ExoEntry(INFO_MARKER, (nodeId, UNDEFINED_ACT_ID))
-  val templateMySignals = ExoEntry(nodeId, null)
-  val templateNodeSignals = ExoEntry(NODE_SIGNAL_MARKER, null)
+  private var templateAct = ExoEntry("", null)
+  private val templateTable = ExoEntry(TABLE_MARKER, null)
+  private var templateData: DataEntry = DataEntry(null, null, null, null)
+  private var templateUpdateAct = ExoEntry(INFO_MARKER, (nodeId, UNDEFINED_ACT_ID))
+  private val templateMySignals = ExoEntry(nodeId, null)
+  private val templateNodeSignals = ExoEntry(NODE_SIGNAL_MARKER, null)
 
-  def updateNodeInfo(): Unit = {
-    //update space with current function
+  /**
+    * Update the space with the current information
+    */
+  private def updateNodeInfo(): Unit = {
     signalSpace.write(templateUpdateAct, NODE_INFO_LEASE_TIME)
   }
 
-  def tableHasAnalyser(tab: TableType): Boolean = {
+  private def tableHasAnalyser(tab: TableType): Boolean = {
     tab.get(ANALYSER_ACT_ID) match {
       case Some(analyserCount) => analyserCount != 0
       case None => true
     }
   }
 
-  def filterActivities(table: TableType): TableType =
+  private def filterActivities(table: TableType): TableType =
     table.filterNot { case (id, _) => id == ANALYSER_ACT_ID || id == UNDEFINED_ACT_ID }
+
+  val waitQueue: BlockingQueue[Unit] = new LinkedBlockingQueue[Unit]()
+
+  def finishedProcessing(): Unit = waitQueue.add(())
 
   override def run(): Unit = {
 
     //current worker definitions
     var worker: WorkType = NoWork
     var processing: Option[Thread with BusyWorking] = None
-    val waitQueue: BlockingQueue[Unit] = new LinkedBlockingQueue[Unit]()
 
     //times initializer
     var sleepTime = NODE_MIN_SLEEP_TIME
@@ -91,7 +96,8 @@ class CliftonNode extends Thread {
           //checks if it needs to change mode
           checkNeedToChange(activity.id)
         case consWork@ConsecutiveWork(activity) =>
-          consecutiveWork(consWork)
+          if (!consecutiveWork(consWork))
+            sleepForAWhile()
 
           //checks if it needs to change mode
           checkNeedToChange(activity.id)
@@ -118,16 +124,16 @@ class CliftonNode extends Thread {
       }
     }
 
-    def consecutiveWork(consWork: ConsecutiveWork): Unit = {
+    def consecutiveWork(consWork: ConsecutiveWork): Boolean = {
       //get something to process
       dataSpace.take(templateData, ENTRY_READ_TIME) match {
         case Some(dataEntry) =>
           //if something was found
           sleepTime = NODE_MIN_SLEEP_TIME
           process(Vector(dataEntry), consWork.activity)
-        case None => {
-          sleepForAWhile()
-        }
+          true
+        case None =>
+          false
       }
     }
 
@@ -152,7 +158,7 @@ class CliftonNode extends Thread {
               println(bootMessage)
               Log.info(bootMessage)
 
-              processing.foreach{thread =>
+              processing.foreach { thread =>
                 thread.interrupt()
                 thread.join()
               }
@@ -191,7 +197,7 @@ class CliftonNode extends Thread {
       */
     def killOwnSignal(): Unit = {
       Log.info(s"Node $nodeFullId is going to shutdown")
-      processing.foreach { (thread: Thread) =>
+      processing.foreach { thread =>
         thread.interrupt()
         thread.join()
       }
@@ -248,8 +254,7 @@ class CliftonNode extends Thread {
         case Some(dataEntry) =>
           templateData = templateData.setInjectId(dataEntry.injectId)
           for (act <- 1 until actsFrom.size) {
-            val dataEntry = dataSpace.read(templateData.setFrom(actsFrom(act)), ENTRY_READ_TIME)
-            if (dataEntry == null)
+            if (dataSpace.read(templateData.setFrom(actsFrom(act)), ENTRY_READ_TIME).isEmpty)
               return false
           }
           true
@@ -259,7 +264,7 @@ class CliftonNode extends Thread {
     }
 
     /**
-      * try to read all the results of an injectID that should do a Join
+      * Try to read all the results of an injectID that should do a Join
       *
       * @param actsFrom
       * @return if both activities of the join was successfully taken from the space it returns
@@ -283,7 +288,7 @@ class CliftonNode extends Thread {
     }
 
     /**
-      * if a worker is already defined we send the input to be processed
+      * If a worker is already defined we send the input to be processed
       * else, a new thread is created and then the input is send
       *
       * @param dataEntry
@@ -304,14 +309,14 @@ class CliftonNode extends Thread {
 
       while (worker.threadIsBusy) {
         handleSignals()
-        Thread.sleep(1000)
-//        try {
-//          waitQueue.poll(1000, TimeUnit.MILLISECONDS)
-//        } catch {
-//          case _: InterruptedException =>
-//          // thread finished processing
-//          // So, back to normal mode
-//        }
+        try {
+          //        Thread.sleep(10000)
+          waitQueue.poll(10000, TimeUnit.MILLISECONDS)
+        } catch {
+          case _: InterruptedException =>
+          // thread finished processing
+          // So, back to normal mode
+        }
       }
     }
 
@@ -383,7 +388,7 @@ class CliftonNode extends Thread {
       templateAct = templateAct.setMarker(activityId)
       signalSpace.read(templateAct, ENTRY_READ_TIME) match {
         case None =>
-          Log.error(s"ActivitySignal for activity $activityId not found in SignalSpace.")
+          Log.error(s"ActivitySignal for activity $activityId not found in SignalSpace")
           Thread.sleep(ACT_NOT_FOUND_SLEEP_TIME)
         case Some(entry) => entry.payload match {
           case activitySignal: ActivitySignal =>

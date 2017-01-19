@@ -32,7 +32,7 @@ class WorkerThread(node: CliftonNode) extends Thread with Worker with BusyWorkin
         process(activity, input)
         isBusy = false
         //TODO: find a better way to notify the node that we finished processing
-        //        node.callback()
+        node.finishedProcessing()
       }
     } catch {
       case e: InterruptedException =>
