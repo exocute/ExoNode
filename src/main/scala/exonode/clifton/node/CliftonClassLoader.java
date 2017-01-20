@@ -10,13 +10,14 @@ import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarInputStream;
+import com.zink.scala.fly.ScalaFly;
 
 //FIXME: write this class in scala!
 public class CliftonClassLoader extends ClassLoader {
 
     public HashMap<String, byte[]> classByteCodes = new HashMap<String, byte[]>();
 
-    private static FlyOption space;
+    private static ScalaFly space;
 
     public CliftonClassLoader() {
         super(CliftonClassLoader.class.getClassLoader());

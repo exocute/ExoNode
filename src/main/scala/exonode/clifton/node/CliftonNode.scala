@@ -24,20 +24,12 @@ class CliftonNode extends Thread {
   private val signalSpace = SpaceCache.getSignalSpace
   private val dataSpace = SpaceCache.getDataSpace
 
-  //templates to search in spaces
-  private var templateAct = ExoEntry("", null)
-  private val templateTable = ExoEntry(TABLE_MARKER, null)
-  private var templateData: DataEntry = DataEntry(null, null, null, null)
-  private var templateUpdateAct = ExoEntry(INFO_MARKER, (nodeId, UNDEFINED_ACT_ID))
-  private val templateMySignals = ExoEntry(nodeId, null)
-  private val templateNodeSignals = ExoEntry(NODE_SIGNAL_MARKER, null)
-
   private class KillSignalException extends Exception
 
   private def tableHasAnalyser(tab: TableType): Boolean = {
     tab.get(ANALYSER_ACT_ID) match {
       case Some(analyserCount) => analyserCount != 0
-      case None => true
+      case None => false
     }
   }
 
@@ -49,6 +41,14 @@ class CliftonNode extends Thread {
   def finishedProcessing(): Unit = waitQueue.add(())
 
   override def run(): Unit = {
+
+    //templates to search in spaces
+    var templateAct = ExoEntry("", null)
+    val templateTable = ExoEntry(TABLE_MARKER, null)
+    var templateData: DataEntry = DataEntry(null, null, null, null)
+    var templateUpdateAct = ExoEntry(INFO_MARKER, (nodeId, UNDEFINED_ACT_ID))
+    val templateMySignals = ExoEntry(nodeId, null)
+    val templateNodeSignals = ExoEntry(NODE_SIGNAL_MARKER, null)
 
     //current worker definitions
     var worker: WorkType = NoWork
@@ -171,26 +171,29 @@ class CliftonNode extends Thread {
         signalSpace.take(templateTable, ENTRY_READ_TIME).map {
           tableEntry =>
             val table = tableEntry.payload.asInstanceOf[TableType]
-            if (!tableHasAnalyser(table)) {
+            if (tableHasAnalyser(table)) {
+              // other node already is an analyser, so just write the table back
+              signalSpace.write(tableEntry, TABLE_LEASE_TIME)
+            }else{
+              processing.foreach { thread =>
+                thread.interrupt()
+                thread.join()
+              }
+
               val analyserThread = new AnalyserThread(nodeId, table)
+              processing = Some(analyserThread)
               analyserThread.start()
 
               val bootMessage = s"Node $nodeFullId changed to Analyser mode"
               println(bootMessage)
               Log.info(bootMessage)
 
-              processing.foreach { thread =>
-                thread.interrupt()
-                thread.join()
-              }
-              processing = Some(analyserThread)
               while (true) {
                 handleSignals()
                 Thread.sleep(ANALYSER_SLEEP_TIME)
               }
               return true
-            } else
-              signalSpace.write(tableEntry, TABLE_LEASE_TIME)
+            }
         }
       }
       false
@@ -367,8 +370,10 @@ class CliftonNode extends Thread {
                   //should i transform
                   getRandomActivity(filteredTable).foreach {
                     newAct =>
+                      println(s"$nodeFullId trying to change to $newAct    ($filteredTable)")
+
                       val qNew = filteredTable(newAct).toDouble / totalNodes
-                      if (newAct != actId && (q - uw >= n || qNew + uw <= n)) {
+                      if (q - uw >= n || qNew + uw <= n) {
                         setActivity(newAct)
                         return true
                       }
@@ -393,6 +398,7 @@ class CliftonNode extends Thread {
       else {
         val total = tableList.unzip._2.sum
         val n = 1.0 / tableList.size
+        // excludes the current activity and others that probably don't need more nodes
         val list: List[TableEntryType] = tableList.filter(_._2.toDouble / total < n)
 
         if (list.isEmpty)
@@ -421,14 +427,14 @@ class CliftonNode extends Thread {
                 templateUpdateAct = templateUpdateAct.setPayload((nodeId, activityId))
                 templateData = DataEntry(activityId, null, null, null)
                 val activityWorker = new ActivityWorker(activityId, activity, activitySignal.params, activitySignal.outMarkers)
-                val msg = s"Node $nodeFullId changed to $activityId"
+                Log.info(s"Node $nodeFullId changed to $activityId")
                 activitySignal.inMarkers match {
                   case Vector(_) =>
                     worker = ConsecutiveWork(activityWorker)
                   case actFrom: Vector[String] =>
                     worker = JoinWork(activityWorker, actFrom)
                 }
-                Log.info(msg)
+                // send the updated information
                 updateNodeInfo(force = true)
                 sleepTime = NODE_MIN_SLEEP_TIME
               case None =>

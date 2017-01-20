@@ -3,8 +3,10 @@ package exonode.clifton.node.work
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import com.zink.fly.NotifyHandler
+import com.zink.fly.example.NotifyLeaseRenewer
 import exonode.clifton.Protocol._
-import exonode.clifton.node.{ExoEntry, Log, SpaceCache}
+import exonode.clifton.node._
 
 import scala.annotation.tailrec
 import scala.collection.immutable.HashMap
@@ -21,6 +23,7 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
 
   //the number of entries to be taken from space from a defined time
   private val MAX_INFO_CALL = 20
+  private val MAX_GRAPHS = 100
 
   private val signalSpace = SpaceCache.getSignalSpace
 
@@ -29,6 +32,7 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
 
   private val templateInfo = ExoEntry(INFO_MARKER, null)
   private val templateTable = ExoEntry(TABLE_MARKER, null)
+  private val templateGraph = ExoEntry(GRAPH_MARKER, null)
 
   //takes the table from the space and updates the Analyser_Act_ID to 1
   private def createInitialTable(): TableType = {
@@ -41,10 +45,31 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
 
   override def threadIsBusy = true
 
+  private def reloadGraphs(distributionTable: TableType): TableType = {
+    val graphs = signalSpace.readMany(templateGraph, MAX_GRAPHS)
+    distributionTable ++ (for {
+      graph <- graphs
+      (graphId, activities) = graph.payload.asInstanceOf[GraphEntryType]
+      activityId <- activities
+      fullId = graphId + ":" + activityId
+      if !distributionTable.contains(fullId)
+    } yield fullId -> 0).toSeq
+  }
+
+  private var graphsChanged: Boolean = false
+
+  object GraphChangeNotifier extends NotifyHandler {
+    override def templateMatched(): Unit = graphsChanged = true
+  }
+
   override def run(): Unit = {
     try {
+      new NotifyWriteRenewer(signalSpace, templateGraph, GraphChangeNotifier, NOTIFY_GRAPHS_ANALYSER_TIME)
+      new NotifyTakeRenewer(signalSpace, templateGraph, GraphChangeNotifier, NOTIFY_GRAPHS_ANALYSER_TIME)
+
       val trackerTable: TrackerTableType = Nil
-      val initialTable = createInitialTable()
+      val initialTable = reloadGraphs(createInitialTable())
+
       val entryTable = templateTable.setPayload(initialTable)
       signalSpace.write(entryTable, TABLE_LEASE_TIME)
       val lastUpdateTime = System.currentTimeMillis()
@@ -56,7 +81,7 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
 
   @tailrec
   private def readInfosFromSpace(lastUpdateTime: Long, receivedInfos: Boolean,
-                                 trackerTable: TrackerTableType, distributionTable: TableType) {
+                                 trackerTable: TrackerTableType, originalDistributionTable: TableType) {
     //RECEIVE:
     //get many NodeInfoType from the signal space
     val infoEntries = signalSpace.takeMany(templateInfo, MAX_INFO_CALL)
@@ -73,6 +98,12 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
       }
 
     val updatedReceivedInfos = receivedInfos || infoEntries.nonEmpty
+
+    val distributionTable =
+      if (graphsChanged)
+        reloadGraphs(originalDistributionTable)
+      else
+        originalDistributionTable
 
     //SEND:
     if (currentTime - lastUpdateTime >= TABLE_UPDATE_TIME) {
@@ -91,7 +122,18 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
   }
 
   def updateTableInSpace(distributionTable: TableType): Unit = {
-    println(new SimpleDateFormat("HH:mm:ss").format(new Date()) + ": " + distributionTable)
+    {
+      def prettyMap(entry: (String, Int)): (String, String, Int) = entry match {
+        case (str, n) =>
+          val (graphId, actId) = str.splitAt(str.indexOf(":"))
+          (graphId.take(8), actId, n)
+      }
+
+      val prettyTable = distributionTable.toList.map(prettyMap).sortBy(_._2)
+        .map { case (graphId, actId, n) => graphId + actId + " -> " + n }.mkString("(", ", ", ")")
+      println(new SimpleDateFormat("HH:mm:ss").format(new Date()) + ": " + prettyTable)
+    }
+
     signalSpace.take(templateTable, ENTRY_READ_TIME)
     val entryTable = templateTable.setPayload(distributionTable)
     signalSpace.write(entryTable, TABLE_LEASE_TIME)

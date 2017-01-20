@@ -11,6 +11,7 @@ object Protocol {
   val INFO_MARKER = "INFO"
   val TABLE_MARKER = "TABLE"
   val NODE_SIGNAL_MARKER = "NODE"
+  val GRAPH_MARKER = "GRAPH"
 
   val INJECT_SIGNAL_MARKER = ">"
   val COLLECT_SIGNAL_MARKER = "<"
@@ -23,6 +24,8 @@ object Protocol {
   type TableEntryType = (String, Int)
   //(nodeId, activityId) // isBusy in faili
   type NodeInfoType = (String, String)
+  //(graphId, list of activity ids)
+  type GraphEntryType = (String, Vector[String])
 
   // Read times
   val ENTRY_READ_TIME = 0L
@@ -33,12 +36,14 @@ object Protocol {
   val DATA_LEASE_TIME: Long = 1 * 60 * 60 * 1000
   val LOG_LEASE_TIME: Long = 1 * 60 * 60 * 1000
   val TABLE_LEASE_TIME: Long = 60 * 1000
-  val JAR_LEASE_TIME: Long = 365L * 24 * 60 * 60 * 1000 // Long or overflow
+  val JAR_LEASE_TIME: Long = 365L * 24 * 60 * 60 * 1000
+  // Long or overflow
   val ACT_SIGNAL_LEASE_TIME: Long = 24 * 60 * 60 * 1000
 
   // check space for updates
   val TABLE_UPDATE_TIME: Long = 2 * 1000
   val NODE_CHECK_TABLE_TIME: Long = 30 * 1000
+  val NOTIFY_GRAPHS_ANALYSER_TIME: Long = 120 * 1000
 
   // other times
   val NODE_INFO_EXPIRY_TIME: Long = NODE_CHECK_TABLE_TIME * 2
