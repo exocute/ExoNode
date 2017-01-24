@@ -68,9 +68,9 @@ class WorkerThread(node: CliftonNode) extends Thread with Worker with BusyWorkin
     }
 
     //clear Backups
-    for(dataEntry <- dataEntries){
-      dataSpace.takeMany(dataEntry.createBackup(),MAX_BACKUPS_IN_SPACE)
-      dataSpace.takeMany(dataEntry.createInfoBackup(),MAX_BACKUPS_IN_SPACE)
+    for (dataEntry <- dataEntries) {
+      dataSpace.takeMany(dataEntry.createBackup(), MAX_BACKUPS_IN_SPACE)
+      dataSpace.takeMany(dataEntry.createInfoBackup(), MAX_BACKUPS_IN_SPACE)
     }
   }
 

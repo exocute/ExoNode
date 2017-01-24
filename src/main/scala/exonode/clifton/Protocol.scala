@@ -7,8 +7,8 @@ import scala.collection.immutable.HashMap
   */
 object Protocol {
 
-  val MIN = 60 * 1000
-  val HOUR = 60 * MIN
+  private val MIN = 60 * 1000
+  private val HOUR = 60 * MIN
 
   val LOG_MARKER = "LOG"
   val INFO_MARKER = "INFO"
@@ -38,7 +38,6 @@ object Protocol {
   // Read times
   val ENTRY_READ_TIME = 0L
 
-
   // Lease times
   val INJECTOR_LEASE_TIME: Long = 2 * MIN
   val NODE_INFO_LEASE_TIME: Long = MIN
@@ -49,13 +48,13 @@ object Protocol {
   val BACKUP_LEASE_TIME: Long = 1 * HOUR
   val ACT_SIGNAL_LEASE_TIME: Long = 24 * HOUR
 
-  // check space for updates
+  // Check space for updates
   val TABLE_UPDATE_TIME: Long = 2 * 1000
   val NODE_CHECK_TABLE_TIME: Long = 30 * 1000
   val NOTIFY_GRAPHS_ANALYSER_TIME: Long = 120 * 1000
-  val ANALYSER_CHECK_BACKUP_INFO: Long = 10*2*1000// * MIN
+  val ANALYSER_CHECK_BACKUP_INFO: Long = 10 * MIN
 
-  // other times
+  // Other times
   val NODE_INFO_EXPIRY_TIME: Long = NODE_CHECK_TABLE_TIME * 2
   val NODE_MIN_SLEEP_TIME: Long = 250
   val NODE_STEP_SLEEP_TIME: Long = 250
@@ -66,9 +65,8 @@ object Protocol {
   val GRP_CHECKER_TABLE_TIMEOUT: Long = 90 * 1000
   val GRP_CHECKER_SLEEP_TIME: Long = 30 * 1000
   val BACKUP_UPDATE_DATA_TIME: Long = 40 * MIN
-  val BACKUP_UPDATE_INFO_TIME: Long = 5*1000// * MIN
-  val BACKUP_MAX_LIVE_TIME : Long = 15*2*1000// * MIN
-
+  val BACKUP_UPDATE_INFO_TIME: Long = 5 * MIN
+  val BACKUP_MAX_LIVE_TIME : Long = 15 * MIN
 
 }
 

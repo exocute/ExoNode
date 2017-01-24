@@ -1,6 +1,6 @@
 package exonode.clifton.node
 
-import exonode.exocuteCommon.activity.Activity
+import exocute.Activity
 
 import scala.collection.mutable
 

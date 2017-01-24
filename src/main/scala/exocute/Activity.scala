@@ -1,4 +1,4 @@
-package exonode.exocuteCommon.activity
+package exocute
 
 import java.io.Serializable
 

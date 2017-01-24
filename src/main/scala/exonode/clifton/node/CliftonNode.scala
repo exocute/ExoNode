@@ -361,16 +361,14 @@ class CliftonNode extends Thread {
         val currentTime = System.currentTimeMillis()
         if (currentTime - initProcessTime > BACKUP_UPDATE_INFO_TIME) {
           initProcessTime = currentTime
-          println("Renew!")
-          updateNodeInfo(true)
+          updateNodeInfo(force = true)
         }
         if (currentTime - initDataProcessTime > BACKUP_UPDATE_DATA_TIME) {
           initDataProcessTime = currentTime
           renewerBackup(dataEntries)
         }
         try {
-          //        Thread.sleep(10000)
-          waitQueue.poll(100, TimeUnit.MILLISECONDS)
+          waitQueue.poll(10000, TimeUnit.MILLISECONDS)
         } catch {
           case _: InterruptedException =>
           // thread finished processing
@@ -402,10 +400,9 @@ class CliftonNode extends Thread {
                 //checks if its need to update function
                 if (q > n && Random.nextDouble() < (q - n) / q) {
                   //should i transform
-                  getRandomActivity(filteredTable).foreach {
-                    newAct =>
-                      println(s"$nodeFullId trying to change to $newAct    ($filteredTable)")
-
+                  getRandomActivity(filteredTable) match {
+                    case None => //No activity found
+                    case Some(newAct) =>
                       val qNew = filteredTable(newAct).toDouble / totalNodes
                       if (q - uw >= n || qNew + uw <= n) {
                         setActivity(newAct)
