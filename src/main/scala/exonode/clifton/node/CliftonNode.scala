@@ -4,6 +4,7 @@ import java.util.UUID
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 
 import exonode.clifton.Protocol._
+import exonode.clifton.node.entries.{BackupEntry, DataEntry, ExoEntry}
 import exonode.clifton.node.work.{ConsecutiveWork, _}
 import exonode.clifton.signals.{ActivitySignal, KillGracefullSignal, KillSignal, NodeSignal}
 
@@ -46,7 +47,7 @@ class CliftonNode extends Thread {
     var templateAct = ExoEntry("", null)
     val templateTable = ExoEntry(TABLE_MARKER, null)
     var templateData: DataEntry = DataEntry(null, null, null, null)
-    var templateUpdateAct = ExoEntry(INFO_MARKER, (nodeId, UNDEFINED_ACT_ID))
+    var templateUpdateAct = ExoEntry(INFO_MARKER, (nodeId, UNDEFINED_ACT_ID, NOT_PROCESSING))
     val templateMySignals = ExoEntry(nodeId, null)
     val templateNodeSignals = ExoEntry(NODE_SIGNAL_MARKER, null)
 
@@ -147,7 +148,7 @@ class CliftonNode extends Thread {
 
     def consecutiveWork(consWork: ConsecutiveWork): Boolean = {
       //get something to process
-      dataSpace.take(templateData, ENTRY_READ_TIME) match {
+      takeAndBackup(templateData) match {
         case Some(dataEntry) =>
           //if something was found
           sleepTime = NODE_MIN_SLEEP_TIME
@@ -155,6 +156,17 @@ class CliftonNode extends Thread {
           true
         case None =>
           false
+      }
+    }
+
+    def takeAndBackup(tempData: DataEntry): Option[DataEntry] = {
+      dataSpace.take(tempData, ENTRY_READ_TIME) match {
+        case Some(dataEntry) =>
+          dataSpace.write(dataEntry.createBackup(), BACKUP_LEASE_TIME)
+          dataSpace.write(dataEntry.createInfoBackup(), BACKUP_LEASE_TIME)
+          Some(dataEntry)
+        case None => None
+
       }
     }
 
@@ -174,7 +186,7 @@ class CliftonNode extends Thread {
             if (tableHasAnalyser(table)) {
               // other node already is an analyser, so just write the table back
               signalSpace.write(tableEntry, TABLE_LEASE_TIME)
-            }else{
+            } else {
               processing.foreach { thread =>
                 thread.interrupt()
                 thread.join()
@@ -303,7 +315,7 @@ class CliftonNode extends Thread {
           acc
         } else {
           val from = actsFrom(index)
-          dataSpace.take(templateData.setFrom(from), ENTRY_READ_TIME) match {
+          takeAndBackup(templateData.setFrom(from)) match {
             case None => acc
             case Some(dataEntry) => tryToTakeAllAux(index + 1, acc :+ dataEntry)
           }
@@ -313,14 +325,21 @@ class CliftonNode extends Thread {
       tryToTakeAllAux(0, Vector())
     }
 
+    def renewerBackup(dataEntries: Vector[DataEntry]) = {
+      for (dataEntry <- dataEntries) {
+        dataSpace.write(dataEntry.createBackup(), BACKUP_LEASE_TIME)
+        dataSpace.write(dataEntry.createInfoBackup(), BACKUP_LEASE_TIME)
+      }
+    }
+
     /**
       * If a worker is already defined we send the input to be processed
       * else, a new thread is created and then the input is send
       *
-      * @param dataEntry
+      * @param dataEntries
       * @param activity
       */
-    def process(dataEntry: Vector[DataEntry], activity: ActivityWorker): Unit = {
+    def process(dataEntries: Vector[DataEntry], activity: ActivityWorker): Unit = {
       val worker: Worker with BusyWorking =
         processing match {
           case Some(workerThread: Worker) =>
@@ -331,19 +350,34 @@ class CliftonNode extends Thread {
             processing = Some(workerThread)
             workerThread
         }
-      worker.sendInput(activity, dataEntry)
+      worker.sendInput(activity, dataEntries)
+      templateUpdateAct = templateUpdateAct.setPayload(nodeId, activity.id, dataEntries.head.injectId)
+
+      var initProcessTime = System.currentTimeMillis()
+      var initDataProcessTime = System.currentTimeMillis()
 
       while (worker.threadIsBusy) {
         handleSignals()
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - initProcessTime > BACKUP_UPDATE_INFO_TIME) {
+          initProcessTime = currentTime
+          println("Renew!")
+          updateNodeInfo(true)
+        }
+        if (currentTime - initDataProcessTime > BACKUP_UPDATE_DATA_TIME) {
+          initDataProcessTime = currentTime
+          renewerBackup(dataEntries)
+        }
         try {
           //        Thread.sleep(10000)
-          waitQueue.poll(10000, TimeUnit.MILLISECONDS)
+          waitQueue.poll(100, TimeUnit.MILLISECONDS)
         } catch {
           case _: InterruptedException =>
           // thread finished processing
           // So, back to normal mode
         }
       }
+      templateUpdateAct = templateUpdateAct.setPayload(nodeId, activity.id, NOT_PROCESSING)
     }
 
     /**
@@ -424,7 +458,7 @@ class CliftonNode extends Thread {
           case activitySignal: ActivitySignal =>
             ActivityCache.getActivity(activitySignal.name) match {
               case Some(activity) =>
-                templateUpdateAct = templateUpdateAct.setPayload((nodeId, activityId))
+                templateUpdateAct = templateUpdateAct.setPayload((nodeId, activityId, NOT_PROCESSING))
                 templateData = DataEntry(activityId, null, null, null)
                 val activityWorker = new ActivityWorker(activityId, activity, activitySignal.params, activitySignal.outMarkers)
                 Log.info(s"Node $nodeFullId changed to $activityId")

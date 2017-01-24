@@ -4,9 +4,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 import com.zink.fly.NotifyHandler
-import com.zink.fly.example.NotifyLeaseRenewer
 import exonode.clifton.Protocol._
 import exonode.clifton.node._
+import exonode.clifton.node.entries.{BackupInfoEntry, ExoEntry}
 
 import scala.annotation.tailrec
 import scala.collection.immutable.HashMap
@@ -26,13 +26,19 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
   private val MAX_GRAPHS = 100
 
   private val signalSpace = SpaceCache.getSignalSpace
+  private val dataSpace = SpaceCache.getDataSpace
 
   private type TrackerEntryType = (NodeInfoType, Long)
   private type TrackerTableType = List[TrackerEntryType]
+  //((actID, injID)), time)
+  private type TableBackupType = HashMap[(String, String), Long]
+
 
   private val templateInfo = ExoEntry(INFO_MARKER, null)
   private val templateTable = ExoEntry(TABLE_MARKER, null)
   private val templateGraph = ExoEntry(GRAPH_MARKER, null)
+  private val templateBackup = BackupInfoEntry(null, null, null)
+  private var backupsTime = System.currentTimeMillis()
 
   //takes the table from the space and updates the Analyser_Act_ID to 1
   private def createInitialTable(): TableType = {
@@ -73,28 +79,66 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
       val entryTable = templateTable.setPayload(initialTable)
       signalSpace.write(entryTable, TABLE_LEASE_TIME)
       val lastUpdateTime = System.currentTimeMillis()
-      readInfosFromSpace(lastUpdateTime, receivedInfos = false, trackerTable, initialTable)
+      val backupTable: TableBackupType = new HashMap[(String, String), Long]()
+      readInfosFromSpace(lastUpdateTime, receivedInfos = false, trackerTable, initialTable, backupTable)
     } catch {
       case _: InterruptedException =>
     }
   }
 
+  def updateBackupTable(backupTable: TableBackupType, info: NodeInfoType): TableBackupType = {
+    val (_, actId, injId) = info
+    val backupEntry = (actId, injId)
+    if (backupTable.contains(backupEntry)) {
+      backupTable.updated(backupEntry, System.currentTimeMillis() + BACKUP_MAX_LIVE_TIME)
+    } else backupTable
+  }
+
+
+  def updateBackup(table: TableBackupType, info: BackupInfoEntry): TableBackupType = {
+    val infoBackup = (info.toAct, info.injectId)
+    if (table.contains(infoBackup))
+      table
+    else
+      table.updated(infoBackup, System.currentTimeMillis() + BACKUP_MAX_LIVE_TIME)
+  }
+
+  def convertToData(backup: ((String, String), Long)): BackupInfoEntry = {
+    backup match {
+      case ((to, injId), _) => BackupInfoEntry(to, null, injId)
+    }
+  }
+
+  def recoveryData(backup: ((String, String), Long)) = {
+    val backupTmpl = convertToData(backup)
+    val backupInfos = dataSpace.takeMany(backupTmpl, 2)
+    val templateData = backupInfos.map(_.createTemplate())
+    val backupData = templateData.map(dataEntry => dataSpace.take(dataEntry, ENTRY_READ_TIME))
+    backupData.foreach(backupDataEntry => dataSpace.write(backupDataEntry.get.createDataEntry(), DATA_LEASE_TIME))
+  }
+
   @tailrec
   private def readInfosFromSpace(lastUpdateTime: Long, receivedInfos: Boolean,
-                                 trackerTable: TrackerTableType, originalDistributionTable: TableType) {
+                                 trackerTable: TrackerTableType, originalDistributionTable: TableType,
+                                 processBackupTable: TableBackupType) {
     //RECEIVE:
     //get many NodeInfoType from the signal space
+
     val infoEntries = signalSpace.takeMany(templateInfo, MAX_INFO_CALL)
 
     val currentTime = System.currentTimeMillis()
 
-    val newTrackerTable =
+    val (newTrackerTable, newBackupTable) =
       if (infoEntries.nonEmpty) {
         val nodeInfos = infoEntries.map(_.payload.asInstanceOf[NodeInfoType])
-        nodeInfos.foldLeft(trackerTable)((tracker, info) => updateTrackerTable(tracker, info, currentTime))
+        val (notProcessing, processing) = nodeInfos.partition(_._3 == NOT_PROCESSING)
+        val trackUpdateTable = notProcessing.foldLeft(trackerTable)((tracker, info) => updateTrackerTable(tracker, info, currentTime))
+        println(processing)
+        val backupUpdateTable = processing.foldLeft(processBackupTable)((backupTable, info) => updateBackupTable(backupTable, info))
+        (trackUpdateTable, backupUpdateTable)
       } else {
         Thread.sleep(ANALYSER_SLEEP_TIME)
-        trackerTable
+        (trackerTable, processBackupTable)
       }
 
     val updatedReceivedInfos = receivedInfos || infoEntries.nonEmpty
@@ -105,19 +149,32 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
       else
         originalDistributionTable
 
+    val finalBackupTable =
+      if (currentTime - backupsTime > ANALYSER_CHECK_BACKUP_INFO) {
+        backupsTime = currentTime
+        val maxNodes = originalDistributionTable.size
+        val backupInfos = dataSpace.readMany(templateBackup, newTrackerTable.size * maxNodes)
+        val notFilterBackupTable = backupInfos.foldLeft(newBackupTable)((table, info) => updateBackup(table, info))
+        val (expiredBackups, backupTable) = notFilterBackupTable.partition(_._2 < currentTime)
+        expiredBackups.foreach(backup => recoveryData(backup))
+        println("Expired: " + expiredBackups, "backupTable: " + backupTable, currentTime)
+        backupTable
+      } else
+        newBackupTable
+
     //SEND:
     if (currentTime - lastUpdateTime >= TABLE_UPDATE_TIME) {
       if (updatedReceivedInfos) {
         val cleanTrackerTable = cleanExpiredTrackerTable(newTrackerTable, currentTime)
         val newDistributionTable = updateDistributionTable(cleanTrackerTable, distributionTable, currentTime)
         updateTableInSpace(newDistributionTable)
-        readInfosFromSpace(currentTime, updatedReceivedInfos, newTrackerTable, newDistributionTable)
+        readInfosFromSpace(currentTime, updatedReceivedInfos, newTrackerTable, newDistributionTable, finalBackupTable)
       } else {
         updateTableInSpace(distributionTable)
-        readInfosFromSpace(currentTime, updatedReceivedInfos, newTrackerTable, distributionTable)
+        readInfosFromSpace(currentTime, updatedReceivedInfos, newTrackerTable, distributionTable, finalBackupTable)
       }
     } else {
-      readInfosFromSpace(lastUpdateTime, updatedReceivedInfos, newTrackerTable, distributionTable)
+      readInfosFromSpace(lastUpdateTime, updatedReceivedInfos, newTrackerTable, distributionTable, finalBackupTable)
     }
   }
 
@@ -142,7 +199,7 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
   def updateTrackerTable(trackerTable: TrackerTableType, newEntry: NodeInfoType, currentTime: Long): TrackerTableType = {
     //updates the table with a new entry
     val expiryTime = NODE_INFO_EXPIRY_TIME + currentTime
-    (newEntry, expiryTime) :: trackerTable.filterNot { case ((id, _), _) => id == newEntry._1 }
+    (newEntry, expiryTime) :: trackerTable.filterNot { case ((id, _, _), _) => id == newEntry._1 }
   }
 
   /**
@@ -154,7 +211,7 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
 
   def updateDistributionTable(trackerTable: TrackerTableType, distributionTable: TableType, currentTime: Long): TableType = {
     //Cleans the table of dead or busy nodes:
-    val groupedByActivity = trackerTable.groupBy { case ((_, actId), _) => actId }
+    val groupedByActivity = trackerTable.groupBy { case ((_, actId, _), _) => actId }
     val countOfNodesByActivity: Map[String, Int] = groupedByActivity.mapValues(_.size).
       +((ANALYSER_ACT_ID, distributionTable.getOrElse(ANALYSER_ACT_ID, 0)))
 

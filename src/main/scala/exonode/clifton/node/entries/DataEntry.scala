@@ -1,4 +1,4 @@
-package exonode.clifton.node
+package exonode.clifton.node.entries
 
 import java.io.Serializable
 
@@ -18,5 +18,9 @@ case class DataEntry(toAct: String, fromAct: String, injectId: String, data: Ser
   def setInjectId(newInjectId: String): DataEntry = DataEntry(toAct, fromAct, newInjectId, data)
 
   def setData(newData: Serializable): DataEntry = DataEntry(toAct, fromAct, injectId, newData)
+
+  def createBackup(): BackupEntry = BackupEntry(toAct, fromAct, injectId, data)
+
+  def createInfoBackup(): BackupInfoEntry = BackupInfoEntry(toAct, fromAct, injectId)
 
 }

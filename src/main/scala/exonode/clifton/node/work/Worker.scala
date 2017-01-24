@@ -1,6 +1,6 @@
 package exonode.clifton.node.work
 
-import exonode.clifton.node.DataEntry
+import exonode.clifton.node.entries.DataEntry
 
 /**
   * Created by #ScalaTeam on 18-01-2017.

@@ -1,4 +1,4 @@
-package exonode.clifton.node
+package exonode.clifton.node.entries
 
 import java.io.Serializable
 

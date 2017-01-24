@@ -4,7 +4,8 @@ import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 import java.io.Serializable
 
 import exonode.clifton.Protocol._
-import exonode.clifton.node.{CliftonNode, DataEntry, Log, SpaceCache}
+import exonode.clifton.node.entries.DataEntry
+import exonode.clifton.node.{CliftonNode, Log, SpaceCache}
 
 /**
   * this thread is continually running till be shutdown
@@ -43,8 +44,8 @@ class WorkerThread(node: CliftonNode) extends Thread with Worker with BusyWorkin
     }
   }
 
-  def process(activity: ActivityWorker, dataEntry: Vector[DataEntry]): Unit = {
-    val input: Vector[Serializable] = dataEntry.map(_.data)
+  def process(activity: ActivityWorker, dataEntries: Vector[DataEntry]): Unit = {
+    val input: Vector[Serializable] = dataEntries.map(_.data)
     val runningSince = System.currentTimeMillis()
     Log.info(s"Node ${node.nodeId}(${activity.id}) started processing")
 
@@ -55,14 +56,21 @@ class WorkerThread(node: CliftonNode) extends Thread with Worker with BusyWorkin
         activity.process(input)
     }
     Log.info(s"Node ${node.nodeId}(${activity.id}) finished processing in ${System.currentTimeMillis() - runningSince}ms")
-    insertNewResult(result, activity.id, dataEntry.head.injectId, activity.acsTo)
+    insertNewResult(result, activity.id, dataEntries, activity.acsTo)
     println(s"Node ${node.nodeId}(${activity.id}) Result " + result.toString.take(50) + "...")
   }
 
-  def insertNewResult(result: Serializable, actId: String, injId: String, actsTo: Vector[String]): Unit = {
+  def insertNewResult(result: Serializable, actId: String, dataEntries: Vector[DataEntry], actsTo: Vector[String]): Unit = {
+    val injId = dataEntries.head.injectId
     for (actTo <- actsTo) {
       val dataEntry = DataEntry(actTo, actId, injId, result)
       dataSpace.write(dataEntry, DATA_LEASE_TIME)
+    }
+
+    //clear Backups
+    for(dataEntry <- dataEntries){
+      dataSpace.takeMany(dataEntry.createBackup(),MAX_BACKUPS_IN_SPACE)
+      dataSpace.takeMany(dataEntry.createInfoBackup(),MAX_BACKUPS_IN_SPACE)
     }
   }
 

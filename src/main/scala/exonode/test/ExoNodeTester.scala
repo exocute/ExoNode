@@ -1,11 +1,12 @@
 package exonode.test
 
 import exonode.clifton.Protocol._
-import exonode.clifton.node.{CliftonNode, ExoEntry, SpaceCache}
+import exonode.clifton.node.{CliftonNode, SpaceCache}
 import org.scalatest.FlatSpec
 import java.io.Serializable
 import java.util.Random
 
+import exonode.clifton.node.entries.ExoEntry
 import exonode.clifton.signals.KillSignal
 
 import scala.collection.immutable.HashMap
