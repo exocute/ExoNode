@@ -38,6 +38,9 @@ class WorkerThread(node: CliftonNode) extends Thread with Worker with BusyWorkin
     } catch {
       case e: InterruptedException =>
         println("InterruptedException: " + e.getMessage)
+      case e: RuntimeException =>
+        println("Message: " + e.getCause + e.getStackTrace().mkString)
+        Log.error("Message: " + e.getCause + e.getStackTrace().mkString)
       case e: Throwable =>
         println("Message: " + e.getMessage)
         Log.error("Message: " + e.getMessage)
@@ -62,9 +65,17 @@ class WorkerThread(node: CliftonNode) extends Thread with Worker with BusyWorkin
 
   def insertNewResult(result: Serializable, actId: String, dataEntries: Vector[DataEntry], actsTo: Vector[String]): Unit = {
     val injId = dataEntries.head.injectId
-    for (actTo <- actsTo) {
-      val dataEntry = DataEntry(actTo, actId, injId, result)
-      dataSpace.write(dataEntry, DATA_LEASE_TIME)
+    if (actsTo.size == 1 || !result.isInstanceOf[Vector[Serializable]]) {
+      for (actTo <- actsTo) {
+        val dataEntry = DataEntry(actTo, actId, injId, result)
+        dataSpace.write(dataEntry, DATA_LEASE_TIME)
+      }
+    } else {
+      val resultVector = result.asInstanceOf[Vector[Serializable]]
+      for (index <- 0 until actsTo.size) {
+        val dataEntry = DataEntry(actsTo(index), actId, injId, resultVector(index))
+        dataSpace.write(dataEntry, DATA_LEASE_TIME)
+      }
     }
 
     //clear Backups

@@ -36,15 +36,18 @@ object Log {
   private def formatMessage(msg: String) = {
     // check an exception and catch the resulting stuff
     val stack = new Throwable().getStackTrace
-    val sb = new StringBuilder
-    val callerTrace = stack(3)
-    sb.append(callerTrace.getClassName)
-    sb.append(":")
-    sb.append(callerTrace.getMethodName)
-    sb.append(":")
-    sb.append(callerTrace.getLineNumber)
-    sb.append(":")
-    sb + msg
+    if (stack.size > 3) {
+      val sb = new StringBuilder
+      val callerTrace = stack(3)
+      sb.append(callerTrace.getClassName)
+      sb.append(":")
+      sb.append(callerTrace.getMethodName)
+      sb.append(":")
+      sb.append(callerTrace.getLineNumber)
+      sb.append(":")
+      sb + msg
+    } else
+      msg
   }
 
 }
