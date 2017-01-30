@@ -47,7 +47,7 @@ class CliftonNode extends Thread {
     var templateAct = ExoEntry("", null)
     val templateTable = ExoEntry(TABLE_MARKER, null)
     var templateData: DataEntry = DataEntry(null, null, null, null)
-    var templateUpdateAct = ExoEntry(INFO_MARKER, (nodeId, UNDEFINED_ACT_ID, NOT_PROCESSING))
+    var templateUpdateAct = ExoEntry(INFO_MARKER, (nodeId, UNDEFINED_ACT_ID, NOT_PROCESSING_MARKER))
     val templateMySignals = ExoEntry(nodeId, null)
     val templateNodeSignals = ExoEntry(NODE_SIGNAL_MARKER, null)
 
@@ -72,9 +72,9 @@ class CliftonNode extends Thread {
       s"$nodeId($fromId)"
     }
 
-    val bootMessage = s"Node $nodeFullId is ready to start"
-    println(bootMessage)
-    Log.info(bootMessage)
+    val bootMessage = s"Node is ready to start"
+    println(s"$nodeFullId;$bootMessage")
+    Log.info(nodeFullId, bootMessage)
     try {
       while (true) {
         handleSignals()
@@ -86,21 +86,9 @@ class CliftonNode extends Thread {
           case NoWork =>
             // worker is not defined yet
             doNoWork()
-          case work if work.hasWork =>
-            work match {
-              case joinWork@JoinWork(activity, _) =>
-                while (tryToDoJoin(joinWork)) {
-                  //checks if it needs to change mode
-                  checkNeedToChange(activity.id)
-                }
-              case consWork@ConsecutiveWork(activity) =>
-                while (consecutiveWork(consWork)) {
-                  //checks if it needs to change mode
-                  checkNeedToChange(activity.id)
-                }
-              case _ => // ignore
-            }
-            if (!checkNeedToChange(work.activity.id)) {
+          case w if w.hasWork =>
+            searchForDataToProcess()
+            if (!checkNeedToChange(worker.activity.id)) {
               updateNodeInfo()
               sleepForAWhile()
             }
@@ -108,6 +96,24 @@ class CliftonNode extends Thread {
       }
     } catch {
       case _: KillSignalException => println(s"Going to stop: $nodeFullId")
+    }
+
+    def searchForDataToProcess(): Unit = {
+      worker match {
+        case JoinWork(activity, _) =>
+          if (tryToDoJoin(worker.asInstanceOf[JoinWork])) {
+            //checks if it needs to change mode
+            checkNeedToChange(activity.id)
+            searchForDataToProcess()
+          }
+        case ConsecutiveWork(activity) =>
+          if (consecutiveWork(worker.asInstanceOf[ConsecutiveWork])) {
+            //checks if it needs to change mode
+            checkNeedToChange(activity.id)
+            searchForDataToProcess()
+          }
+        case _ => // ignore
+      }
     }
 
     /**
@@ -132,12 +138,12 @@ class CliftonNode extends Thread {
         case Some(tableEntry) =>
           val table = tableEntry.payload.asInstanceOf[TableType]
           if (!tryToBeAnalyser(table)) {
-            sleepTime = NODE_MIN_SLEEP_TIME
             val filteredTable = filterActivities(table)
             if (filteredTable.isEmpty) {
               updateNodeInfo()
               sleepForAWhile()
             } else {
+              sleepTime = NODE_MIN_SLEEP_TIME
               getRandomActivity(filteredTable).foreach(act => setActivity(act))
             }
           }
@@ -166,7 +172,6 @@ class CliftonNode extends Thread {
           dataSpace.write(dataEntry.createInfoBackup(), BACKUP_LEASE_TIME)
           Some(dataEntry)
         case None => None
-
       }
     }
 
@@ -196,9 +201,9 @@ class CliftonNode extends Thread {
               processing = Some(analyserThread)
               analyserThread.start()
 
-              val bootMessage = s"Node $nodeFullId changed to Analyser mode"
-              println(bootMessage)
-              Log.info(bootMessage)
+              val bootMessage = "Node changed to Analyser mode"
+              println(s"$nodeFullId;$bootMessage")
+              Log.info(nodeFullId, bootMessage)
 
               while (true) {
                 handleSignals()
@@ -234,9 +239,9 @@ class CliftonNode extends Thread {
       * kills the current node
       */
     def killOwnSignal(): Unit = {
-      val shutdownMsg = s"Node $nodeFullId is going to shutdown"
-      println(shutdownMsg)
-      Log.info(shutdownMsg)
+      val shutdownMsg = "Node is going to shutdown"
+      println(s"$nodeFullId;$shutdownMsg")
+      Log.info(nodeFullId, shutdownMsg)
       processing.foreach { thread =>
         thread.interrupt()
         thread.join()
@@ -271,9 +276,8 @@ class CliftonNode extends Thread {
               process(values, joinWork.activity)
             } else {
               // some values were lost ?
-              Log.error(s"Data was missing from node $nodeFullId" +
-                s" with injectId=${values.head.injectId}, ${values.size} values found, " +
-                s"${joinWork.actsFrom.size} values expected")
+              Log.error(nodeFullId, s"Data was missing with injectId=${values.head.injectId}, " +
+                s"${values.size} values found, ${joinWork.actsFrom.size} values expected")
             }
         }
         true
@@ -292,7 +296,8 @@ class CliftonNode extends Thread {
         case Some(dataEntry) =>
           templateData = templateData.setInjectId(dataEntry.injectId)
           for (act <- 1 until actsFrom.size) {
-            if (dataSpace.read(templateData.setFrom(actsFrom(act)), ENTRY_READ_TIME).isEmpty)
+            val entry = dataSpace.read(templateData.setFrom(actsFrom(act)), ENTRY_READ_TIME)
+            if (entry.isEmpty)
               return false
           }
           true
@@ -325,7 +330,7 @@ class CliftonNode extends Thread {
       tryToTakeAllAux(0, Vector())
     }
 
-    def renewerBackup(dataEntries: Vector[DataEntry]) = {
+    def renewBackup(dataEntries: Vector[DataEntry]): Unit = {
       for (dataEntry <- dataEntries) {
         dataSpace.write(dataEntry.createBackup(), BACKUP_LEASE_TIME)
         dataSpace.write(dataEntry.createInfoBackup(), BACKUP_LEASE_TIME)
@@ -340,23 +345,23 @@ class CliftonNode extends Thread {
       * @param activity
       */
     def process(dataEntries: Vector[DataEntry], activity: ActivityWorker): Unit = {
-      val worker: Worker with BusyWorking =
+      val workerThread: WorkerThread =
         processing match {
-          case Some(workerThread: Worker) =>
+          case Some(workerThread: WorkerThread) =>
             workerThread
           case _ =>
             val workerThread = new WorkerThread(this)
-            workerThread.start()
             processing = Some(workerThread)
+            workerThread.start()
             workerThread
         }
-      worker.sendInput(activity, dataEntries)
+      workerThread.sendInput(activity, dataEntries)
       templateUpdateAct = templateUpdateAct.setPayload(nodeId, activity.id, dataEntries.head.injectId)
 
       var initProcessTime = System.currentTimeMillis()
       var initDataProcessTime = System.currentTimeMillis()
 
-      while (worker.threadIsBusy) {
+      while (workerThread.threadIsBusy) {
         handleSignals()
         val currentTime = System.currentTimeMillis()
         if (currentTime - initProcessTime > BACKUP_UPDATE_INFO_TIME) {
@@ -365,7 +370,7 @@ class CliftonNode extends Thread {
         }
         if (currentTime - initDataProcessTime > BACKUP_UPDATE_DATA_TIME) {
           initDataProcessTime = currentTime
-          renewerBackup(dataEntries)
+          renewBackup(dataEntries)
         }
         try {
           waitQueue.poll(10000, TimeUnit.MILLISECONDS)
@@ -375,7 +380,7 @@ class CliftonNode extends Thread {
           // So, back to normal mode
         }
       }
-      templateUpdateAct = templateUpdateAct.setPayload(nodeId, activity.id, NOT_PROCESSING)
+      templateUpdateAct = templateUpdateAct.setPayload(nodeId, activity.id, NOT_PROCESSING_MARKER)
     }
 
     /**
@@ -449,27 +454,27 @@ class CliftonNode extends Thread {
       templateAct = templateAct.setMarker(activityId)
       signalSpace.read(templateAct, ENTRY_READ_TIME) match {
         case None =>
-          Log.error(s"ActivitySignal for activity $activityId not found in SignalSpace")
+          Log.error(nodeFullId, s"ActivitySignal for activity $activityId not found in SignalSpace")
           Thread.sleep(ACT_NOT_FOUND_SLEEP_TIME)
         case Some(entry) => entry.payload match {
           case activitySignal: ActivitySignal =>
             ActivityCache.getActivity(activitySignal.name) match {
               case Some(activity) =>
-                templateUpdateAct = templateUpdateAct.setPayload((nodeId, activityId, NOT_PROCESSING))
+                templateUpdateAct = templateUpdateAct.setPayload((nodeId, activityId, NOT_PROCESSING_MARKER))
                 templateData = DataEntry(activityId, null, null, null)
                 val activityWorker = new ActivityWorker(activityId, activity, activitySignal.params, activitySignal.outMarkers)
-                Log.info(s"Node $nodeFullId changed to $activityId")
+                Log.info(nodeFullId, s"Node changed to $activityId")
                 activitySignal.inMarkers match {
                   case Vector(_) =>
                     worker = ConsecutiveWork(activityWorker)
-                  case actFrom: Vector[String] =>
-                    worker = JoinWork(activityWorker, actFrom)
+                  case actsFrom: Vector[String] =>
+                    worker = JoinWork(activityWorker, actsFrom)
                 }
                 // send the updated information
                 updateNodeInfo(force = true)
                 sleepTime = NODE_MIN_SLEEP_TIME
               case None =>
-                Log.error("Class could not be loaded: " + activitySignal.name)
+                Log.error(nodeFullId, "Class could not be loaded: " + activitySignal.name)
                 Thread.sleep(ACT_NOT_FOUND_SLEEP_TIME)
             }
         }

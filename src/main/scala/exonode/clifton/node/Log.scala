@@ -24,14 +24,14 @@ object Log {
 
   private val space = SpaceCache.getSignalSpace
 
-  private def sendMessage(msg: String, logLevel: LogLevel): Unit = {
-    val logSignal = LoggingSignal(msg, logLevel)
+  private def sendMessage(id: String, msg: String, logLevel: LogLevel): Unit = {
+    val logSignal = LoggingSignal(id + LOG_SEPARATOR + msg, logLevel)
     space.write(ExoEntry(LOG_MARKER, logSignal), LOG_LEASE_TIME)
   }
 
-  def info(msg: String): Unit = sendMessage(msg, Info)
+  def info(id: String, msg: String): Unit = sendMessage(id, msg, Info)
 
-  def error(msg: String): Unit = sendMessage(formatMessage(msg), Error)
+  def error(id: String, msg: String): Unit = sendMessage(id, formatMessage(msg), Error)
 
   private def formatMessage(msg: String) = {
     // check an exception and catch the resulting stuff

@@ -8,7 +8,7 @@ import exonode.clifton.node.entries.DataEntry
 import exonode.clifton.node.{CliftonNode, Log, SpaceCache}
 
 /**
-  * this thread is continually running till be shutdown
+  * This thread is continually running till be shutdown
   * it process the input at the same that allows the node to handle signals
   */
 class WorkerThread(node: CliftonNode) extends Thread with Worker with BusyWorking {
@@ -26,6 +26,8 @@ class WorkerThread(node: CliftonNode) extends Thread with Worker with BusyWorkin
     queue.add((activity, input))
   }
 
+  val nodeId: String = node.nodeId
+
   override def run(): Unit = {
     try {
       while (true) {
@@ -39,18 +41,20 @@ class WorkerThread(node: CliftonNode) extends Thread with Worker with BusyWorkin
       case e: InterruptedException =>
         println("InterruptedException: " + e.getMessage)
       case e: RuntimeException =>
-        println("Message: " + e.getCause + e.getStackTrace().mkString)
-        Log.error("Message: " + e.getCause + e.getStackTrace().mkString)
+        val msg = "Message: " + e.getCause + ", " + e.getStackTrace.mkString(", ")
+        println(nodeId + ";" + msg)
+        Log.error(nodeId, msg)
       case e: Throwable =>
-        println("Message: " + e.getMessage)
-        Log.error("Message: " + e.getMessage)
+        val msg = "Message: " + e.getMessage
+        println(nodeId + ";" + msg)
+        Log.error(nodeId, msg)
     }
   }
 
   def process(activity: ActivityWorker, dataEntries: Vector[DataEntry]): Unit = {
     val input: Vector[Serializable] = dataEntries.map(_.data)
     val runningSince = System.currentTimeMillis()
-    Log.info(s"Node ${node.nodeId}(${activity.id}) started processing")
+    Log.info(s"$nodeId(${activity.id})", "Node started processing")
 
     val result = {
       if (input.size == 1)
@@ -58,21 +62,21 @@ class WorkerThread(node: CliftonNode) extends Thread with Worker with BusyWorkin
       else
         activity.process(input)
     }
-    Log.info(s"Node ${node.nodeId}(${activity.id}) finished processing in ${System.currentTimeMillis() - runningSince}ms")
+    Log.info(s"$nodeId(${activity.id})", s"Node finished processing in ${System.currentTimeMillis() - runningSince}ms")
     insertNewResult(result, activity.id, dataEntries, activity.acsTo)
-    println(s"Node ${node.nodeId}(${activity.id}) Result " + result.toString.take(50) + "...")
+    println(s"$nodeId(${activity.id});Result " + result.toString.take(50) + "...")
   }
 
   def insertNewResult(result: Serializable, actId: String, dataEntries: Vector[DataEntry], actsTo: Vector[String]): Unit = {
     val injId = dataEntries.head.injectId
-    if (actsTo.size == 1 || !result.isInstanceOf[Vector[Serializable]]) {
+    if (actsTo.size == 1) {
       for (actTo <- actsTo) {
         val dataEntry = DataEntry(actTo, actId, injId, result)
         dataSpace.write(dataEntry, DATA_LEASE_TIME)
       }
     } else {
       val resultVector = result.asInstanceOf[Vector[Serializable]]
-      for (index <- 0 until actsTo.size) {
+      for (index <- actsTo.indices) {
         val dataEntry = DataEntry(actsTo(index), actId, injId, resultVector(index))
         dataSpace.write(dataEntry, DATA_LEASE_TIME)
       }

@@ -119,7 +119,7 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
           dataSpace.take(backupEntryTemplate, ENTRY_READ_TIME) match {
             case None =>
               // information was lost
-              Log.error(s"Data with inject id ${backupEntryTemplate.injectId} wasn't recoverable")
+              Log.error(s"$nodeId($ANALYSER_ACT_ID)", s"Data with inject id ${backupEntryTemplate.injectId} wasn't recoverable")
             case Some(backupEntry) =>
               dataSpace.write(backupEntry.createDataEntry(), DATA_LEASE_TIME)
           }
@@ -142,7 +142,7 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
     val (updatedTrackerTable, newBackupTable) =
       if (infoEntries.nonEmpty) {
         val nodeInfos = infoEntries.map(_.payload.asInstanceOf[NodeInfoType])
-        val (notProcessing, processing) = nodeInfos.partition(_._3 == NOT_PROCESSING)
+        val (notProcessing, processing) = nodeInfos.partition(_._3 == NOT_PROCESSING_MARKER)
         val trackUpdateTable = notProcessing.foldLeft(trackerTable)((tracker, info) => updateTrackerTable(tracker, info, currentTime))
         val backupUpdateTable = processing.foldLeft(backupsTable)((backupTable, info) => updateBackupTable(backupTable, info))
         (trackUpdateTable, backupUpdateTable)

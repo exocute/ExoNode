@@ -10,18 +10,19 @@ object Protocol {
   private val MIN = 60 * 1000
   private val HOUR = 60 * MIN
 
+  val INJECT_SIGNAL_MARKER = ">"
+  val COLLECT_SIGNAL_MARKER = "<"
   val LOG_MARKER = "LOG"
   val INFO_MARKER = "INFO"
   val TABLE_MARKER = "TABLE"
   val NODE_SIGNAL_MARKER = "NODE"
   val GRAPH_MARKER = "GRAPH"
-  val NOT_PROCESSING : String = "NOT_PROCESSING"
-
-  val INJECT_SIGNAL_MARKER = ">"
-  val COLLECT_SIGNAL_MARKER = "<"
+  val NOT_PROCESSING_MARKER  = "NOT_PROCESSING"
 
   val ANALYSER_ACT_ID = "@"
   val UNDEFINED_ACT_ID = "?"
+
+  val LOG_SEPARATOR = ";"
 
   type TableType = HashMap[String, Int]
   //(activityId, number of activities)
