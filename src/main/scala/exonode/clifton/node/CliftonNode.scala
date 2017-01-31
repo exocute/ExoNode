@@ -4,7 +4,7 @@ import java.util.UUID
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 
 import exonode.clifton.Protocol._
-import exonode.clifton.node.entries.{BackupEntry, DataEntry, ExoEntry}
+import exonode.clifton.node.entries.{DataEntry, ExoEntry}
 import exonode.clifton.node.work.{ConsecutiveWork, _}
 import exonode.clifton.signals.{ActivitySignal, KillGracefullSignal, KillSignal, NodeSignal}
 
@@ -27,19 +27,13 @@ class CliftonNode extends Thread {
 
   private class KillSignalException extends Exception
 
-  private def tableHasAnalyser(tab: TableType): Boolean = {
-    tab.get(ANALYSER_ACT_ID) match {
-      case Some(analyserCount) => analyserCount != 0
-      case None => false
-    }
-  }
-
   private def filterActivities(table: TableType): TableType =
-    table.filterNot { case (id, _) => id == ANALYSER_ACT_ID || id == UNDEFINED_ACT_ID }
+    table.filterNot { case (id, _) => id == UNDEFINED_ACT_ID }
 
   val waitQueue: BlockingQueue[Unit] = new LinkedBlockingQueue[Unit]()
 
   def finishedProcessing(): Unit = waitQueue.add(())
+
 
   override def run(): Unit = {
 
@@ -50,6 +44,7 @@ class CliftonNode extends Thread {
     var templateUpdateAct = ExoEntry(INFO_MARKER, (nodeId, UNDEFINED_ACT_ID, NOT_PROCESSING_MARKER))
     val templateMySignals = ExoEntry(nodeId, null)
     val templateNodeSignals = ExoEntry(NODE_SIGNAL_MARKER, null)
+    val templateWantToBeAnalyser = ExoEntry(WANT_TO_BE_ANALYSER_MARKER, null)
 
     //current worker definitions
     var worker: WorkType = NoWork
@@ -66,7 +61,7 @@ class CliftonNode extends Thread {
         worker.activity.id
       else
         processing match {
-          case Some(_: Analyser) => ANALYSER_ACT_ID
+          case Some(_: Analyser) => ANALYSER_MARKER
           case _ => UNDEFINED_ACT_ID
         }
       s"$nodeId($fromId)"
@@ -137,18 +132,70 @@ class CliftonNode extends Thread {
       signalSpace.read(templateTable, ENTRY_READ_TIME) match {
         case Some(tableEntry) =>
           val table = tableEntry.payload.asInstanceOf[TableType]
-          if (!tryToBeAnalyser(table)) {
-            val filteredTable = filterActivities(table)
-            if (filteredTable.isEmpty) {
-              updateNodeInfo()
-              sleepForAWhile()
-            } else {
-              sleepTime = NODE_MIN_SLEEP_TIME
-              getRandomActivity(filteredTable).foreach(act => setActivity(act))
-            }
+          val filteredTable = filterActivities(table)
+          if (filteredTable.isEmpty) {
+            updateNodeInfo()
+            sleepForAWhile()
+          } else {
+            sleepTime = NODE_MIN_SLEEP_TIME
+            getRandomActivity(filteredTable).foreach(act => setActivity(act))
           }
         case None =>
+          consensusAnalyser()
           sleepForAWhile()
+      }
+    }
+
+    def consensusAnalyser(loopNumber: Int = 0): Unit = {
+      // FIXME 5 => Magic number
+      signalSpace.readMany(templateWantToBeAnalyser, 5).toList match {
+        case Nil =>
+          if (signalSpace.read(templateTable, ENTRY_READ_TIME).isEmpty) {
+            signalSpace.write(templateWantToBeAnalyser.setPayload(nodeId), WANT_TO_BE_ANALYSER_LEASE_TIME)
+            Thread.sleep(WANT_TO_BE_ANALYSER_SLEEP_TIME)
+            consensusAnalyser()
+          }
+        case List(entry) =>
+          if (loopNumber >= 3) {
+            if (entry.payload == nodeId) {
+              signalSpace.write(ExoEntry(TABLE_MARKER, EMPTY_TABLE), TABLE_LEASE_TIME)
+              signalSpace.take(entry, ENTRY_READ_TIME)
+              transformIntoAnalyser()
+            }
+          } else {
+            Thread.sleep(WANT_TO_BE_ANALYSER_SLEEP_TIME)
+            consensusAnalyser(loopNumber + 1)
+          }
+        case entries: List[ExoEntry] =>
+          val maxId = entries.maxBy(_.payload.toString).payload
+          for {
+            entry <- entries
+            if entry.payload != maxId
+          } {
+            signalSpace.take(entry, ENTRY_READ_TIME)
+          }
+          Thread.sleep(WANT_TO_BE_ANALYSER_SLEEP_TIME)
+          consensusAnalyser()
+      }
+    }
+
+    def transformIntoAnalyser(): Unit = {
+      processing.foreach { thread =>
+        thread.interrupt()
+        thread.join()
+      }
+
+      val analyserThread = new AnalyserThread(nodeId)
+      processing = Some(analyserThread)
+      analyserThread.start()
+
+      val analyserBootMessage = "Node changed to analyser mode"
+      println(s"$nodeFullId;$analyserBootMessage")
+      Log.info(nodeFullId, analyserBootMessage)
+
+      while (true) {
+        handleSignals()
+        Thread.sleep(ANALYSER_SLEEP_TIME)
       }
     }
 
@@ -173,47 +220,6 @@ class CliftonNode extends Thread {
           Some(dataEntry)
         case None => None
       }
-    }
-
-    /**
-      * Receives the tableEntry and checks if the position where analyser node is defined has zero
-      * If true, tries to take the table from the space and if it gets it, starts the analyser mode
-      * Once analyser mode is started the table is updated in space with the info that already exists
-      * one clifton node in analyser mode
-      *
-      * @return true if the node was transformed in analyser node, false otherwise
-      */
-    def tryToBeAnalyser(originalTable: TableType): Boolean = {
-      if (!tableHasAnalyser(originalTable)) {
-        signalSpace.take(templateTable, ENTRY_READ_TIME).map {
-          tableEntry =>
-            val table = tableEntry.payload.asInstanceOf[TableType]
-            if (tableHasAnalyser(table)) {
-              // other node already is an analyser, so just write the table back
-              signalSpace.write(tableEntry, TABLE_LEASE_TIME)
-            } else {
-              processing.foreach { thread =>
-                thread.interrupt()
-                thread.join()
-              }
-
-              val analyserThread = new AnalyserThread(nodeId, table)
-              processing = Some(analyserThread)
-              analyserThread.start()
-
-              val bootMessage = "Node changed to Analyser mode"
-              println(s"$nodeFullId;$bootMessage")
-              Log.info(nodeFullId, bootMessage)
-
-              while (true) {
-                handleSignals()
-                Thread.sleep(ANALYSER_SLEEP_TIME)
-              }
-              return true
-            }
-        }
-      }
-      false
     }
 
     /**
@@ -391,29 +397,29 @@ class CliftonNode extends Thread {
     def checkNeedToChange(actId: String): Boolean = {
       val nowTime = System.currentTimeMillis()
       if (nowTime - checkTime > NODE_CHECK_TABLE_TIME) {
-        signalSpace.read(templateTable, ENTRY_READ_TIME).foreach {
-          tableEntry =>
+        signalSpace.read(templateTable, ENTRY_READ_TIME) match {
+          case None => consensusAnalyser()
+          case Some(tableEntry) =>
             //first we need to check if the table already contains an analyser
             val table = tableEntry.payload.asInstanceOf[TableType]
-            if (!tryToBeAnalyser(table)) {
-              val filteredTable = filterActivities(table)
-              if (filteredTable.size > 1) {
-                val totalNodes = filteredTable.values.sum
-                val n = 1.0 / filteredTable.size
-                val q = filteredTable(actId).toDouble / totalNodes
-                val uw = 1.0 / totalNodes
-                //checks if its need to update function
-                if (q > n && Random.nextDouble() < (q - n) / q) {
-                  //should i transform
-                  getRandomActivity(filteredTable) match {
-                    case None => //No activity found
-                    case Some(newAct) =>
-                      val qNew = filteredTable(newAct).toDouble / totalNodes
-                      if (q - uw >= n || qNew + uw <= n) {
-                        setActivity(newAct)
-                        return true
-                      }
-                  }
+            val filteredTable = filterActivities(table)
+            // there needs to be at least one activity to jump to
+            if (filteredTable.size > 1) {
+              val totalNodes = filteredTable.values.sum
+              val n = 1.0 / filteredTable.size
+              val q = filteredTable(actId).toDouble / totalNodes
+              val uw = 1.0 / totalNodes
+              //checks if its need to update function
+              if (q > n && Random.nextDouble() < (q - n) / q) {
+                //should i transform
+                getRandomActivity(filteredTable) match {
+                  case None => //No activity found
+                  case Some(newAct) =>
+                    val qNew = filteredTable(newAct).toDouble / totalNodes
+                    if (q - uw >= n || qNew + uw <= n) {
+                      setActivity(newAct)
+                      return true
+                    }
                 }
               }
             }

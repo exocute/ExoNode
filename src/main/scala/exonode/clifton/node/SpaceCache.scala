@@ -2,6 +2,8 @@ package exonode.clifton.node
 
 import com.zink.fly.kit.{FlyFactory, FlyFinder}
 import com.zink.scala.fly.ScalaFly
+import exonode.clifton.node.entries.{BackupEntry, BackupInfoEntry, DataEntry, ExoEntry}
+import exonode.distributer.{FlyClassEntry, FlyJarEntry}
 
 import scala.collection.mutable
 
@@ -58,4 +60,17 @@ object SpaceCache {
   def getDataSpace: ScalaFly = getSpace(data, dataHost)
 
   def getJarSpace: ScalaFly = getSpace(jar, jarHost)
+
+  def cleanAllSpaces(): Unit = {
+    def clean(space: ScalaFly, cleanTemplate: AnyRef): Unit = {
+      while (space.take(cleanTemplate, 0).isDefined) {}
+    }
+
+    clean(getJarSpace, FlyJarEntry(null, null))
+    clean(getJarSpace, FlyClassEntry(null, null))
+    clean(getDataSpace, DataEntry(null, null, null, null))
+    clean(getDataSpace, BackupEntry(null, null, null, null))
+    clean(getDataSpace, BackupInfoEntry(null, null, null))
+    clean(getSignalSpace, ExoEntry(null, null))
+  }
 }

@@ -19,7 +19,7 @@ import scala.language.implicitConversions
   * are processing some activity. Analyser Node it's one of the modes of what a clifton node
   * can be transformed.
   */
-class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread with BusyWorking {
+class AnalyserThread(nodeId: String) extends Thread with BusyWorking {
 
   //the number of entries to be taken from space from a defined time
   private val MAX_INFO_CALL = 20
@@ -38,15 +38,6 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
   private val templateTable = ExoEntry(TABLE_MARKER, null)
   private val templateGraph = ExoEntry(GRAPH_MARKER, null)
   private val templateBackup = BackupInfoEntry(null, null, null)
-
-  //takes the table from the space and updates the Analyser_Act_ID to 1
-  private def createInitialTable(): TableType = {
-    for {
-      (entryNo, _) <- initialTable
-      if entryNo != ANALYSER_ACT_ID
-    } yield entryNo -> 0
-  } + (ANALYSER_ACT_ID -> 1)
-
 
   override def threadIsBusy = true
 
@@ -73,7 +64,7 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
       new NotifyTakeRenewer(signalSpace, templateGraph, GraphChangeNotifier, NOTIFY_GRAPHS_ANALYSER_TIME)
 
       val trackerTable: TrackerTableType = Nil
-      val initialTable = reloadGraphs(createInitialTable())
+      val initialTable = reloadGraphs(EMPTY_TABLE)
 
       val entryTable = templateTable.setPayload(initialTable)
       signalSpace.write(entryTable, TABLE_LEASE_TIME)
@@ -119,7 +110,7 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
           dataSpace.take(backupEntryTemplate, ENTRY_READ_TIME) match {
             case None =>
               // information was lost
-              Log.error(s"$nodeId($ANALYSER_ACT_ID)", s"Data with inject id ${backupEntryTemplate.injectId} wasn't recoverable")
+              Log.error(s"$nodeId($ANALYSER_MARKER)", s"Data with inject id ${backupEntryTemplate.injectId} wasn't recoverable")
             case Some(backupEntry) =>
               dataSpace.write(backupEntry.createDataEntry(), DATA_LEASE_TIME)
           }
@@ -217,8 +208,7 @@ class AnalyserThread(nodeId: String, initialTable: TableType) extends Thread wit
   private def updateDistributionTable(trackerTable: TrackerTableType, distributionTable: TableType, currentTime: Long): TableType = {
     //Cleans the table of dead or busy nodes:
     val groupedByActivity = trackerTable.groupBy { case ((_, actId, _), _) => actId }
-    val countOfNodesByActivity: Map[String, Int] = groupedByActivity.mapValues(_.size).
-      +((ANALYSER_ACT_ID, distributionTable.getOrElse(ANALYSER_ACT_ID, 0)))
+    val countOfNodesByActivity: Map[String, Int] = groupedByActivity.mapValues(_.size)
 
     countOfNodesByActivity ++ {
       for {

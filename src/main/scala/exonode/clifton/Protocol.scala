@@ -17,14 +17,16 @@ object Protocol {
   val TABLE_MARKER = "TABLE"
   val NODE_SIGNAL_MARKER = "NODE"
   val GRAPH_MARKER = "GRAPH"
-  val NOT_PROCESSING_MARKER  = "NOT_PROCESSING"
+  val NOT_PROCESSING_MARKER = "NOT_PROCESSING"
+  val WANT_TO_BE_ANALYSER_MARKER = "WANT_TO_BE_ANALYSER"
 
-  val ANALYSER_ACT_ID = "@"
+  val ANALYSER_MARKER = "@"
   val UNDEFINED_ACT_ID = "?"
 
   val LOG_SEPARATOR = ";"
 
   type TableType = HashMap[String, Int]
+  lazy val EMPTY_TABLE: TableType = HashMap[String, Int]()
   //(activityId, number of activities)
   type TableEntryType = (String, Int)
   //(nodeId, activityId, injectID)
@@ -48,6 +50,7 @@ object Protocol {
   val JAR_LEASE_TIME: Long = 365L * 24 * HOUR
   val BACKUP_LEASE_TIME: Long = 1 * HOUR
   val ACT_SIGNAL_LEASE_TIME: Long = 24 * HOUR
+  val WANT_TO_BE_ANALYSER_LEASE_TIME: Long = 5 * MIN
 
   // Check space for updates
   val TABLE_UPDATE_TIME: Long = 2 * 1000
@@ -61,13 +64,12 @@ object Protocol {
   val NODE_STEP_SLEEP_TIME: Long = 250
   val NODE_MAX_SLEEP_TIME: Long = 5 * 1000
   val ACT_NOT_FOUND_SLEEP_TIME: Long = 30 * 1000
-  val ANALYSER_SLEEP_TIME: Long = 1 * 1000
+  val ANALYSER_SLEEP_TIME: Long = 5 * 1000
   val INITIAL_TABLE_LEASE_TIME: Long = TABLE_LEASE_TIME * 2
-  val GRP_CHECKER_TABLE_TIMEOUT: Long = 90 * 1000
-  val GRP_CHECKER_SLEEP_TIME: Long = 30 * 1000
   val BACKUP_UPDATE_DATA_TIME: Long = 40 * MIN
   val BACKUP_UPDATE_INFO_TIME: Long = 5 * MIN
-  val BACKUP_MAX_LIVE_TIME : Long = 15 * MIN
+  val BACKUP_MAX_LIVE_TIME: Long = 15 * MIN
+  val WANT_TO_BE_ANALYSER_SLEEP_TIME: Long = 5 * 1000
 
 }
 
