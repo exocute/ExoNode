@@ -50,7 +50,6 @@ object Protocol {
   val JAR_LEASE_TIME: Long = 365L * 24 * HOUR
   val BACKUP_LEASE_TIME: Long = 1 * HOUR
   val ACT_SIGNAL_LEASE_TIME: Long = 24 * HOUR
-  val WANT_TO_BE_ANALYSER_LEASE_TIME: Long = 5 * MIN
 
   // Check space for updates
   val TABLE_UPDATE_TIME: Long = 2 * 1000
@@ -69,7 +68,20 @@ object Protocol {
   val BACKUP_UPDATE_DATA_TIME: Long = 40 * MIN
   val BACKUP_UPDATE_INFO_TIME: Long = 5 * MIN
   val BACKUP_MAX_LIVE_TIME: Long = 15 * MIN
-  val WANT_TO_BE_ANALYSER_SLEEP_TIME: Long = 5 * 1000
+
+  // Consensus constants
+  val CONSENSUS_ENTRIES_TO_READ = 5
+  val CONSENSUS_LOOPS_TO_FINISH = 3
+
+  // (should change with the amount of nodes in space: more nodes -> more time)
+  val CONSENSUS_WANT_TBA_LEASE_TIME: Long = 1 * MIN
+
+  val CONSENSUS_MIN_SLEEP_TIME: Long = 3 * 1000
+  val CONSENSUS_MAX_SLEEP_TIME: Long = 6 * 1000
+
+  def consensusRandomSleepTime(): Long = {
+    CONSENSUS_MIN_SLEEP_TIME + (math.random() * (CONSENSUS_MAX_SLEEP_TIME - CONSENSUS_MIN_SLEEP_TIME)).toLong
+  }
 
 }
 

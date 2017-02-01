@@ -27,13 +27,21 @@ class CliftonNode extends Thread {
 
   private class KillSignalException extends Exception
 
+  private val DEBUG: Boolean = false
+
+  @inline private def debug(msg: String) = {
+    if (DEBUG) {
+      println(nodeId, msg)
+      Log.info(nodeId, msg)
+    }
+  }
+
   private def filterActivities(table: TableType): TableType =
     table.filterNot { case (id, _) => id == UNDEFINED_ACT_ID }
 
   val waitQueue: BlockingQueue[Unit] = new LinkedBlockingQueue[Unit]()
 
   def finishedProcessing(): Unit = waitQueue.add(())
-
 
   override def run(): Unit = {
 
@@ -146,36 +154,50 @@ class CliftonNode extends Thread {
       }
     }
 
-    def consensusAnalyser(loopNumber: Int = 0): Unit = {
-      // FIXME 5 => Magic number
-      signalSpace.readMany(templateWantToBeAnalyser, 5).toList match {
-        case Nil =>
-          if (signalSpace.read(templateTable, ENTRY_READ_TIME).isEmpty) {
-            signalSpace.write(templateWantToBeAnalyser.setPayload(nodeId), WANT_TO_BE_ANALYSER_LEASE_TIME)
-            Thread.sleep(WANT_TO_BE_ANALYSER_SLEEP_TIME)
-            consensusAnalyser()
-          }
-        case List(entry) =>
-          if (loopNumber >= 3) {
-            if (entry.payload == nodeId) {
-              signalSpace.write(ExoEntry(TABLE_MARKER, EMPTY_TABLE), TABLE_LEASE_TIME)
-              signalSpace.take(entry, ENTRY_READ_TIME)
-              transformIntoAnalyser()
+    def consensusAnalyser(): Unit = {
+      Thread.sleep(consensusRandomSleepTime())
+      auxConsensusAnalyser()
+
+      def auxConsensusAnalyser(loopNumber: Int = 0): Unit = {
+        signalSpace.readMany(templateWantToBeAnalyser, CONSENSUS_ENTRIES_TO_READ).toList match {
+          case Nil =>
+            if (signalSpace.read(templateTable, ENTRY_READ_TIME).isEmpty) {
+              signalSpace.write(templateWantToBeAnalyser.setPayload(nodeId), CONSENSUS_WANT_TBA_LEASE_TIME)
+              debug("Wants to be analyser")
+              Thread.sleep(consensusRandomSleepTime())
+              auxConsensusAnalyser()
             }
-          } else {
-            Thread.sleep(WANT_TO_BE_ANALYSER_SLEEP_TIME)
-            consensusAnalyser(loopNumber + 1)
-          }
-        case entries: List[ExoEntry] =>
-          val maxId = entries.maxBy(_.payload.toString).payload
-          for {
-            entry <- entries
-            if entry.payload != maxId
-          } {
-            signalSpace.take(entry, ENTRY_READ_TIME)
-          }
-          Thread.sleep(WANT_TO_BE_ANALYSER_SLEEP_TIME)
-          consensusAnalyser()
+          case List(entry) =>
+            if (loopNumber >= CONSENSUS_LOOPS_TO_FINISH) {
+              if (entry.payload == nodeId) {
+                signalSpace.write(ExoEntry(TABLE_MARKER, EMPTY_TABLE), TABLE_LEASE_TIME)
+                if (signalSpace.take(entry, ENTRY_READ_TIME).isDefined) {
+                  // Everything worked fine and the consensus is successful
+                  debug("found that consensus is successful")
+                  transformIntoAnalyser()
+                } else {
+                  // The consensus have failed (want-to-be-analyser entry have timeout from the space)
+                  debug("found that consensus have failed")
+                  signalSpace.take(TABLE_MARKER, ENTRY_READ_TIME)
+                }
+              }
+            } else {
+              debug(s"is going to loop ${loopNumber + 1}")
+              Thread.sleep(CONSENSUS_MAX_SLEEP_TIME)
+              auxConsensusAnalyser(loopNumber + 1)
+            }
+          case entries: List[ExoEntry] =>
+            val maxId = entries.maxBy(_.payload.toString).payload
+            for {
+              entry <- entries
+              if entry.payload != maxId
+            } {
+              debug(s"is deleting entry with id ${entry.payload}")
+              signalSpace.take(entry, ENTRY_READ_TIME)
+            }
+            Thread.sleep(consensusRandomSleepTime())
+            auxConsensusAnalyser()
+        }
       }
     }
 
@@ -229,6 +251,7 @@ class CliftonNode extends Thread {
     def handleSignals(): Unit = {
       signalSpace.take(templateMySignals, ENTRY_READ_TIME).foreach {
         mySignalEntry =>
+          debug(s"Reading a signal: $mySignalEntry")
           val mySignal = mySignalEntry.payload.asInstanceOf[NodeSignal]
           processSignal(mySignal)
       }
@@ -248,9 +271,14 @@ class CliftonNode extends Thread {
       val shutdownMsg = "Node is going to shutdown"
       println(s"$nodeFullId;$shutdownMsg")
       Log.info(nodeFullId, shutdownMsg)
-      processing.foreach { thread =>
-        thread.interrupt()
-        thread.join()
+      processing match {
+        case None =>
+        case Some(analyserThread: Analyser) =>
+          analyserThread.cancelThread()
+          analyserThread.join()
+        case Some(thread) =>
+          thread.interrupt()
+          thread.join()
       }
       throw new KillSignalException
     }

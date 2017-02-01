@@ -11,7 +11,7 @@ import exonode.clifton.node.{CliftonNode, Log, SpaceCache}
   * This thread is continually running till be shutdown
   * it process the input at the same that allows the node to handle signals
   */
-class WorkerThread(node: CliftonNode) extends Thread with Worker with BusyWorking {
+class WorkerThread(node: CliftonNode) extends Thread with BusyWorking with Worker {
 
   private val dataSpace = SpaceCache.getDataSpace
 

@@ -5,4 +5,6 @@ package exonode.clifton.node.work
   */
 trait BusyWorking {
   def threadIsBusy: Boolean
+
+  def cancelThread(): Unit = ()
 }
