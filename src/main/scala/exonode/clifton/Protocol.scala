@@ -70,7 +70,7 @@ object Protocol {
   val BACKUP_MAX_LIVE_TIME: Long = 15 * MIN
 
   // Consensus constants
-  val CONSENSUS_ENTRIES_TO_READ = 5
+  val CONSENSUS_ENTRIES_TO_READ = 3
   val CONSENSUS_LOOPS_TO_FINISH = 3
 
   // (should change with the amount of nodes in space: more nodes -> more time)

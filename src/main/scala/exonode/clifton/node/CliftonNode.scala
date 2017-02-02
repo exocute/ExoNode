@@ -1,7 +1,7 @@
 package exonode.clifton.node
 
-import java.util.UUID
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
+import java.util.{Date, UUID}
 
 import exonode.clifton.Protocol._
 import exonode.clifton.node.entries.{DataEntry, ExoEntry}
@@ -29,13 +29,20 @@ class CliftonNode extends Thread {
 
   private val DEBUG: Boolean = false
 
-  @inline private def debug(msg: String) = {
+  @inline private def debug(msg: String, writeToLog: Boolean = true) = {
     if (DEBUG) {
-      println(nodeId, msg)
-      Log.info(nodeId, msg)
+      println(new Date().toString, nodeId, msg)
+      if (writeToLog)
+        Log.info(nodeId, msg)
     }
   }
 
+  /**
+    * Filter the undefined activity (symbol '?') from the table
+    *
+    * @param table the table to be filtered
+    * @return the filtered table
+    */
   private def filterActivities(table: TableType): TableType =
     table.filterNot { case (id, _) => id == UNDEFINED_ACT_ID }
 
@@ -157,6 +164,7 @@ class CliftonNode extends Thread {
     def consensusAnalyser(): Unit = {
       Thread.sleep(consensusRandomSleepTime())
       auxConsensusAnalyser()
+      Thread.sleep(CONSENSUS_MAX_SLEEP_TIME)
 
       def auxConsensusAnalyser(loopNumber: Int = 0): Unit = {
         signalSpace.readMany(templateWantToBeAnalyser, CONSENSUS_ENTRIES_TO_READ).toList match {
@@ -310,8 +318,10 @@ class CliftonNode extends Thread {
               process(values, joinWork.activity)
             } else {
               // some values were lost ?
-              Log.error(nodeFullId, s"Data was missing with injectId=${values.head.injectId}, " +
-                s"${values.size} values found, ${joinWork.actsFrom.size} values expected")
+              val msg = s"Data was missing with injectId=${values.head.injectId}, " +
+                s"${values.size} values found, ${joinWork.actsFrom.size} values expected"
+              println(nodeFullId + ";" + msg)
+              Log.error(nodeFullId, msg)
             }
         }
         true
@@ -425,10 +435,12 @@ class CliftonNode extends Thread {
     def checkNeedToChange(actId: String): Boolean = {
       val nowTime = System.currentTimeMillis()
       if (nowTime - checkTime > NODE_CHECK_TABLE_TIME) {
+        checkTime = nowTime
         signalSpace.read(templateTable, ENTRY_READ_TIME) match {
           case None => consensusAnalyser()
           case Some(tableEntry) =>
-            //first we need to check if the table already contains an analyser
+            //FIXME test if the table still contains the current activity
+
             val table = tableEntry.payload.asInstanceOf[TableType]
             val filteredTable = filterActivities(table)
             // there needs to be at least one activity to jump to
@@ -452,7 +464,6 @@ class CliftonNode extends Thread {
               }
             }
         }
-        checkTime = nowTime
       }
       false
     }
@@ -466,7 +477,7 @@ class CliftonNode extends Thread {
       if (tableList.isEmpty)
         None
       else {
-        val total = tableList.unzip._2.sum
+        val total = math.max(1, tableList.unzip._2.sum)
         val n = 1.0 / tableList.size
         // excludes the current activity and others that probably don't need more nodes
         val list: List[TableEntryType] = tableList.filter(_._2.toDouble / total < n)
@@ -488,6 +499,7 @@ class CliftonNode extends Thread {
       templateAct = templateAct.setMarker(activityId)
       signalSpace.read(templateAct, ENTRY_READ_TIME) match {
         case None =>
+          println(s"$nodeFullId;ActivitySignal for activity $activityId not found in SignalSpace")
           Log.error(nodeFullId, s"ActivitySignal for activity $activityId not found in SignalSpace")
           Thread.sleep(ACT_NOT_FOUND_SLEEP_TIME)
         case Some(entry) => entry.payload match {
@@ -508,6 +520,7 @@ class CliftonNode extends Thread {
                 updateNodeInfo(force = true)
                 sleepTime = NODE_MIN_SLEEP_TIME
               case None =>
+                println(nodeFullId + ";Class could not be loaded: " + activitySignal.name)
                 Log.error(nodeFullId, "Class could not be loaded: " + activitySignal.name)
                 Thread.sleep(ACT_NOT_FOUND_SLEEP_TIME)
             }

@@ -88,8 +88,10 @@ object StartExoNode {
         println("Not a valid number of nodes.")
     }
     numberOfNodes.foreach(nodes => {
-      for (x <- 1 to nodes)
+      for (x <- 1 to nodes) {
         new CliftonNode().start()
+        Thread.sleep((math.random() * 25).toInt)
+      }
 
       println("Started " + nodes + " nodes.")
     })
