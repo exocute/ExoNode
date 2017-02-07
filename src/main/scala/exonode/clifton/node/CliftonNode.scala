@@ -4,6 +4,7 @@ import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 import java.util.{Date, UUID}
 
 import exonode.clifton.Protocol._
+import exonode.clifton.node.CliftonNode._
 import exonode.clifton.node.entries.{DataEntry, ExoEntry}
 import exonode.clifton.node.work.{ConsecutiveWork, _}
 import exonode.clifton.signals.{ActivitySignal, KillGracefullSignal, KillSignal, NodeSignal}
@@ -26,8 +27,6 @@ class CliftonNode extends Thread {
   private val dataSpace = SpaceCache.getDataSpace
 
   private class KillSignalException extends Exception
-
-  private val DEBUG: Boolean = false
 
   @inline private def debug(msg: String, writeToLog: Boolean = true) = {
     if (DEBUG) {
@@ -178,18 +177,25 @@ class CliftonNode extends Thread {
           case List(entry) =>
             if (loopNumber >= CONSENSUS_LOOPS_TO_FINISH) {
               if (entry.payload == nodeId) {
-                signalSpace.write(ExoEntry(TABLE_MARKER, EMPTY_TABLE), TABLE_LEASE_TIME)
-                if (signalSpace.take(entry, ENTRY_READ_TIME).isDefined) {
-                  // Everything worked fine and the consensus is successful
-                  debug("found that consensus is successful")
-                  transformIntoAnalyser()
+                // Test if really there isn't a table (and therefore an analyser)
+                //FIXME 500 => magic number
+                if (signalSpace.read(templateTable, 500).isEmpty) {
+                  signalSpace.write(ExoEntry(TABLE_MARKER, EMPTY_TABLE), TABLE_LEASE_TIME)
+                  if (signalSpace.take(entry, ENTRY_READ_TIME).isDefined) {
+                    // Everything worked fine and the consensus is successful
+                    debug("found that consensus is successful")
+                    transformIntoAnalyser()
+                  } else {
+                    // The consensus have failed (want-to-be-analyser entry have timeout from the space?)
+                    debug("found that consensus have failed")
+                    signalSpace.take(TABLE_MARKER, ENTRY_READ_TIME)
+                  }
                 } else {
-                  // The consensus have failed (want-to-be-analyser entry have timeout from the space)
-                  debug("found that consensus have failed")
-                  signalSpace.take(TABLE_MARKER, ENTRY_READ_TIME)
+                  debug("found a table when the node was going to be an analyser")
                 }
               }
-            } else {
+            }
+            else {
               debug(s"is going to loop ${loopNumber + 1}")
               Thread.sleep(CONSENSUS_MAX_SLEEP_TIME)
               auxConsensusAnalyser(loopNumber + 1)
@@ -529,4 +535,8 @@ class CliftonNode extends Thread {
     }
   }
 
+}
+
+object CliftonNode {
+  var DEBUG: Boolean = false
 }

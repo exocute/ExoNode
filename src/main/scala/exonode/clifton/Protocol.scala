@@ -76,8 +76,8 @@ object Protocol {
   // (should change with the amount of nodes in space: more nodes -> more time)
   val CONSENSUS_WANT_TBA_LEASE_TIME: Long = 1 * MIN
 
-  val CONSENSUS_MIN_SLEEP_TIME: Long = 3 * 1000
-  val CONSENSUS_MAX_SLEEP_TIME: Long = 6 * 1000
+  val CONSENSUS_MIN_SLEEP_TIME: Long = 2 * 1000
+  val CONSENSUS_MAX_SLEEP_TIME: Long = 4 * 1000
 
   def consensusRandomSleepTime(): Long = {
     CONSENSUS_MIN_SLEEP_TIME + (math.random() * (CONSENSUS_MAX_SLEEP_TIME - CONSENSUS_MIN_SLEEP_TIME)).toLong

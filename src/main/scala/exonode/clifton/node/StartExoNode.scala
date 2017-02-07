@@ -22,6 +22,8 @@ object StartExoNode {
       |  Sets the signalHost.
       |-d, -data ip
       |  Sets the dataHost.
+      |-cleanspaces
+      |  Clean all information from the spaces.
       |--help
       |  display this help and exit.
       |--version
@@ -37,6 +39,7 @@ object StartExoNode {
   def main(args: Array[String]): Unit = {
 
     var numberOfNodes: Option[Int] = None
+    var shouldClean = false
 
     def setHosts(): Unit = {
       val it = args.iterator
@@ -58,9 +61,13 @@ object StartExoNode {
             }.fold(_ => None, identity)
             if (numberOfNodes.isEmpty)
               printlnExit(s"Command $cmd needs an argument")
+          case "-cleanspaces" =>
+            shouldClean = true
           case "--help" =>
             println(getHelpString)
             System.exit(0)
+          case "--DEBUG" =>
+            CliftonNode.DEBUG = true
           case "--version" =>
             //FIXME get version dynamically ?
             println("Exocute version: 0.1")
@@ -72,6 +79,8 @@ object StartExoNode {
     }
 
     setHosts()
+    if (shouldClean)
+      SpaceCache.cleanAllSpaces()
 
     println("  ______           _   _           _         _____ _             _            \n |  ____|         | \\ | |         | |       / ____| |           | |           \n | |__  __  _____ |  \\| | ___   __| | ___  | (___ | |_ __ _ _ __| |_ ___ _ __ \n |  __| \\ \\/ / _ \\| . ` |/ _ \\ / _` |/ _ \\  \\___ \\| __/ _` | '__| __/ _ \\ '__|\n | |____ >  < (_) | |\\  | (_) | (_| |  __/  ____) | || (_| | |  | ||  __/ |   \n |______/_/\\_\\___/|_| \\_|\\___/ \\__,_|\\___| |_____/ \\__\\__,_|_|   \\__\\___|_|   \n                                                                              \n                                                                              ")
 
@@ -87,14 +96,13 @@ object StartExoNode {
       else
         println("Not a valid number of nodes.")
     }
-    numberOfNodes.foreach(nodes => {
-      for (x <- 1 to nodes) {
-        new CliftonNode().start()
-        Thread.sleep((math.random() * 25).toInt)
-      }
 
-      println("Started " + nodes + " nodes.")
-    })
+    for (x <- 1 to numberOfNodes.get) {
+      new CliftonNode().start()
+      Thread.sleep((math.random() * 25).toInt)
+    }
+
+    println("Started " + numberOfNodes.get + " nodes.")
   }
 
   def isValidInt(x: String): Boolean = {

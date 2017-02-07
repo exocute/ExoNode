@@ -110,4 +110,31 @@ class ExoNodeTester extends FlatSpec with BeforeAndAfter {
     assert(readTableFromSpace().isDefined)
   }
 
+  {
+    CliftonNode.DEBUG = true
+    for (n <- 30 to 1 by -1) {
+      s"Only 1 analyser with $n nodes" should "check if there is only one analyser in the space" in {
+        only1Analyser(n)
+      }
+    }
+    CliftonNode.DEBUG = false
+  }
+
+  def only1Analyser(nodes: Int): Unit = {
+    launchNNodes(nodes)
+    Thread.sleep(EXPECTED_TIME_TO_CONSENSUS)
+
+    //kill analyser
+    Thread.sleep(40 * 1000)
+    assert {
+      space.readMany(tabEntry, 2).size == 1 && {
+        Thread.sleep(10 * 1000)
+        space.readMany(tabEntry, 2).size == 1
+      } && {
+        Thread.sleep(10 * 1000)
+        space.readMany(tabEntry, 2).size == 1
+      }
+    }
+  }
+
 }
