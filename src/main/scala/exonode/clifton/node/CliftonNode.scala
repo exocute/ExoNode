@@ -37,7 +37,7 @@ class CliftonNode extends Thread {
   }
 
   /**
-    * Filter the undefined activity (symbol '?') from the table
+    * Filter the undefined activity from the table
     *
     * @param table the table to be filtered
     * @return the filtered table
@@ -445,27 +445,36 @@ class CliftonNode extends Thread {
         signalSpace.read(templateTable, ENTRY_READ_TIME) match {
           case None => consensusAnalyser()
           case Some(tableEntry) =>
-            //FIXME test if the table still contains the current activity
-
             val table = tableEntry.payload.asInstanceOf[TableType]
             val filteredTable = filterActivities(table)
-            // there needs to be at least one activity to jump to
-            if (filteredTable.size > 1) {
-              val totalNodes = filteredTable.values.sum
-              val n = 1.0 / filteredTable.size
-              val q = filteredTable(actId).toDouble / totalNodes
-              val uw = 1.0 / totalNodes
-              //checks if its need to update function
-              if (q > n && Random.nextDouble() < (q - n) / q) {
-                //should i transform
-                getRandomActivity(filteredTable) match {
-                  case None => //No activity found
-                  case Some(newAct) =>
-                    val qNew = filteredTable(newAct).toDouble / totalNodes
-                    if (q - uw >= n || qNew + uw <= n) {
-                      setActivity(newAct)
-                      return true
-                    }
+
+            //Test if the table still contains the current activity
+            if (!filteredTable.contains(actId)) {
+              getRandomActivity(filteredTable) match {
+                case None => setNeutralMode()
+                case Some(act) =>
+                  setActivity(act)
+                  return true
+              }
+            } else {
+              // there needs to be at least one activity to jump to
+              if (filteredTable.size > 1) {
+                val totalNodes = filteredTable.values.sum
+                val n = 1.0 / filteredTable.size
+                val q = filteredTable(actId).toDouble / totalNodes
+                val uw = 1.0 / totalNodes
+                //checks if its need to update function
+                if (q > n && Random.nextDouble() < (q - n) / q) {
+                  //should i transform
+                  getRandomActivity(filteredTable) match {
+                    case None => setNeutralMode()
+                    case Some(newAct) =>
+                      val qNew = filteredTable(newAct).toDouble / totalNodes
+                      if (q - uw >= n || qNew + uw <= n) {
+                        setActivity(newAct)
+                        return true
+                      }
+                  }
                 }
               }
             }
@@ -532,6 +541,12 @@ class CliftonNode extends Thread {
             }
         }
       }
+    }
+
+    def setNeutralMode(): Unit = {
+      worker = NoWork
+      templateUpdateAct = templateUpdateAct.setPayload((nodeId, UNDEFINED_ACT_ID, NOT_PROCESSING_MARKER))
+      updateNodeInfo(force = true)
     }
   }
 

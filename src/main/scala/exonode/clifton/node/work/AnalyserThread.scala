@@ -41,14 +41,19 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
   override def threadIsBusy = true
 
   private def reloadGraphs(distributionTable: TableType): TableType = {
+    graphsChanged = false
     val graphs = signalSpace.readMany(templateGraph, MAX_GRAPHS)
-    distributionTable ++ (for {
+    (for {
       graph <- graphs
       (graphId, activities) = graph.payload.asInstanceOf[GraphEntryType]
       activityId <- activities
       fullId = graphId + ":" + activityId
-      if !distributionTable.contains(fullId)
-    } yield fullId -> 0).toSeq
+    } yield fullId -> {
+      distributionTable.get(fullId) match {
+        case None => 0
+        case Some(v) => v
+      }
+    }).toSeq
   }
 
   private var graphsChanged: Boolean = false
@@ -72,7 +77,7 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
       signalSpace.write(entryTable, TABLE_LEASE_TIME)
       val currentTime = System.currentTimeMillis()
       val backupsTable: TableBackupType = new HashMap[(String, String), Long]()
-      readInfosFromSpace(currentTime, currentTime, trackerTable, initialTable, backupsTable)
+      readInfosFromSpace(currentTime, currentTime, currentTime, trackerTable, initialTable, backupsTable)
     } catch {
       case e: Throwable =>
         writeRenewer.cancel()
@@ -126,8 +131,9 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
   }
 
   @tailrec
-  private def readInfosFromSpace(lastUpdateTime: Long, backupsTime: Long, trackerTable: TrackerTableType,
-                                 originalDistributionTable: TableType, backupsTable: TableBackupType): Unit = {
+  private def readInfosFromSpace(lastUpdateTime: Long, backupsTime: Long, graphsChangedTime: Long,
+                                 trackerTable: TrackerTableType, originalDistributionTable: TableType,
+                                 backupsTable: TableBackupType): Unit = {
     if (!cancel) {
       //RECEIVE:
       //get many NodeInfoType from the signal space
@@ -144,16 +150,15 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
           val backupUpdateTable = processing.foldLeft(backupsTable)((backupTable, info) => updateBackupTable(backupTable, info))
           (trackUpdateTable, backupUpdateTable)
         } else {
-          Thread.sleep(ANALYSER_SLEEP_TIME)
           (trackerTable, backupsTable)
         }
 
-      val updatedDistributionTable = {
+      val (updatedDistributionTable, updatedGraphsChangedTime) = {
         val distTable = updateDistributionTable(trackerTable, originalDistributionTable, currentTime)
-        if (graphsChanged)
-          reloadGraphs(distTable)
+        if (graphsChanged || currentTime - graphsChangedTime > ANALYSER_CHECK_GRAPHS)
+          (reloadGraphs(distTable), currentTime)
         else
-          distTable
+          (distTable, graphsChangedTime)
       }
 
       // Update backup information
@@ -170,14 +175,21 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
           (newBackupTable, backupsTime)
 
       // Send updated distribution table to space
-      if (currentTime - lastUpdateTime >= TABLE_UPDATE_TIME) {
-        val cleanTrackerTable = cleanExpiredTrackerTable(updatedTrackerTable, currentTime)
-        val newDistributionTable = updateDistributionTable(cleanTrackerTable, updatedDistributionTable, currentTime)
-        updateTableInSpace(newDistributionTable)
-        readInfosFromSpace(currentTime, newBackupsTime, cleanTrackerTable, newDistributionTable, updatedBackupsTable)
-      } else {
-        readInfosFromSpace(lastUpdateTime, newBackupsTime, updatedTrackerTable, updatedDistributionTable, updatedBackupsTable)
-      }
+      val (newUpdateTime, finalTrackerTable, finalDistributionTable) =
+        if (currentTime - lastUpdateTime >= TABLE_UPDATE_TIME) {
+          val cleanTrackerTable = cleanExpiredTrackerTable(updatedTrackerTable, currentTime)
+          val newDistributionTable = updateDistributionTable(cleanTrackerTable, updatedDistributionTable, currentTime)
+          updateTableInSpace(newDistributionTable)
+          (currentTime, cleanTrackerTable, newDistributionTable)
+        } else {
+          (lastUpdateTime, updatedTrackerTable, updatedDistributionTable)
+        }
+
+      if (infoEntries.size < MAX_INFO_CALL)
+        Thread.sleep(ANALYSER_SLEEP_TIME)
+
+      readInfosFromSpace(newUpdateTime, newBackupsTime, updatedGraphsChangedTime,
+        finalTrackerTable, finalDistributionTable, updatedBackupsTable)
     }
   }
 
@@ -191,7 +203,7 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
 
       val prettyTable = distributionTable.toList.map(prettyMap).sortBy(_._2)
         .map { case (graphId, actId, n) => graphId + actId + " -> " + n }.mkString("(", ", ", ")")
-      println(new SimpleDateFormat("HH:mm:ss").format(new Date()) + ": " + prettyTable)
+      println(new SimpleDateFormat("HH:mm:ss").format(new Date()) + ": TABLE" + prettyTable)
     }
 
     signalSpace.take(templateTable, ENTRY_READ_TIME)
@@ -214,7 +226,10 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
 
   private def updateDistributionTable(trackerTable: TrackerTableType, distributionTable: TableType, currentTime: Long): TableType = {
     //Cleans the table of dead or busy nodes:
-    val groupedByActivity = trackerTable.groupBy { case ((_, actId, _), _) => actId }
+    val groupedByActivity =
+      trackerTable
+        .groupBy { case ((_, actId, _), _) => actId }
+        .filter { case (actId, _) => actId == UNDEFINED_ACT_ID || distributionTable.contains(actId) }
     val countOfNodesByActivity: Map[String, Int] = groupedByActivity.mapValues(_.size)
 
     countOfNodesByActivity ++ {

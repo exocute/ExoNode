@@ -18,14 +18,14 @@ class ExoNodeTester extends FlatSpec with BeforeAndAfter {
 
   private val space = SpaceCache.getSignalSpace
 
-  private val TEST_TIME = 60 * 1000
+  private val MAX_TIME_FOR_EACH_TEST = 60 * 60 * 1000
 
   implicit def seqToHashMap[A, B](seq: Seq[(A, B)]): HashMap[A, B] = {
     HashMap(seq: _*)
   }
 
   private def writeToSpace(marker: String, input: Serializable) = {
-    space.write(ExoEntry(marker, input), TEST_TIME)
+    space.write(ExoEntry(marker, input), MAX_TIME_FOR_EACH_TEST)
   }
 
   private val tabEntry = ExoEntry(TABLE_MARKER, null)
@@ -54,15 +54,6 @@ class ExoNodeTester extends FlatSpec with BeforeAndAfter {
   }
 
   private val EXPECTED_TIME_TO_CONSENSUS = 10 * 1000 + CONSENSUS_MAX_SLEEP_TIME * (1 + CONSENSUS_LOOPS_TO_FINISH)
-
-  //  def doTestAndCleanSpaces(title: String, description: String, test: => (List[CliftonNode], Boolean)): Unit = {
-  //    title should description in {
-  //      SpaceCache.cleanAllSpaces()
-  //      val (ids, res) = test
-  //      killNNodes(ids)
-  //      assert(res)
-  //    }
-  //  }
 
   before {
     SpaceCache.cleanAllSpaces()
