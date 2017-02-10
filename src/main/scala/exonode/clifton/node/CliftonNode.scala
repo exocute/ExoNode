@@ -3,7 +3,8 @@ package exonode.clifton.node
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 import java.util.{Date, UUID}
 
-import exonode.clifton.Protocol._
+import exonode.clifton.config.Protocol._
+import exonode.clifton.config.BackupConfig
 import exonode.clifton.node.CliftonNode._
 import exonode.clifton.node.entries.{DataEntry, ExoEntry}
 import exonode.clifton.node.work.{ConsecutiveWork, _}
@@ -19,7 +20,7 @@ import scala.util.Random
   * Analyser is responsible for updating the space with the table about the state of every node using the same signal space
   * Worker is responsible for processing input for some activity
   */
-class CliftonNode extends Thread {
+class CliftonNode(implicit backupConfig: BackupConfig) extends Thread {
 
   val nodeId: String = UUID.randomUUID().toString
 
@@ -251,8 +252,8 @@ class CliftonNode extends Thread {
     def takeAndBackup(tempData: DataEntry): Option[DataEntry] = {
       dataSpace.take(tempData, ENTRY_READ_TIME) match {
         case Some(dataEntry) =>
-          dataSpace.write(dataEntry.createBackup(), BACKUP_LEASE_TIME)
-          dataSpace.write(dataEntry.createInfoBackup(), BACKUP_LEASE_TIME)
+          dataSpace.write(dataEntry.createBackup(), backupConfig.BACKUP_DATA_LEASE_TIME)
+          dataSpace.write(dataEntry.createInfoBackup(), backupConfig.BACKUP_DATA_LEASE_TIME)
           Some(dataEntry)
         case None => None
       }
@@ -382,8 +383,8 @@ class CliftonNode extends Thread {
 
     def renewBackup(dataEntries: Vector[DataEntry]): Unit = {
       for (dataEntry <- dataEntries) {
-        dataSpace.write(dataEntry.createBackup(), BACKUP_LEASE_TIME)
-        dataSpace.write(dataEntry.createInfoBackup(), BACKUP_LEASE_TIME)
+        dataSpace.write(dataEntry.createBackup(), backupConfig.BACKUP_DATA_LEASE_TIME)
+        dataSpace.write(dataEntry.createInfoBackup(), backupConfig.BACKUP_DATA_LEASE_TIME)
       }
     }
 
@@ -414,11 +415,11 @@ class CliftonNode extends Thread {
       while (workerThread.threadIsBusy) {
         handleSignals()
         val currentTime = System.currentTimeMillis()
-        if (currentTime - initProcessTime > BACKUP_UPDATE_INFO_TIME) {
+        if (currentTime - initProcessTime > backupConfig.SEND_STILL_PROCESSING_TIME) {
           initProcessTime = currentTime
           updateNodeInfo(force = true)
         }
-        if (currentTime - initDataProcessTime > BACKUP_UPDATE_DATA_TIME) {
+        if (currentTime - initDataProcessTime > backupConfig.RENEW_BACKUP_ENTRIES_TIME) {
           initDataProcessTime = currentTime
           renewBackup(dataEntries)
         }

@@ -2,7 +2,7 @@ package exonode.test
 
 import java.io.Serializable
 
-import exonode.clifton.Protocol._
+import exonode.clifton.config.Protocol._
 import exonode.clifton.node.entries.ExoEntry
 import exonode.clifton.node.{CliftonNode, SpaceCache}
 import exonode.clifton.signals.KillSignal
@@ -48,9 +48,13 @@ class ExoNodeTester extends FlatSpec with BeforeAndAfter {
     nodesList.toList
   }
 
-  private def killNNodes(nodes: List[CliftonNode]): Unit = {
+  private def killNodes(nodes: List[CliftonNode]): Unit = {
     nodes.foreach(node => writeToSpace(node.nodeId, KillSignal))
     nodes.foreach(node => node.join())
+  }
+
+  private def killNodesById(nodeIds: List[String]): Unit = {
+    nodeIds.foreach(nodeId => writeToSpace(nodeId, KillSignal))
   }
 
   private val EXPECTED_TIME_TO_CONSENSUS = 10 * 1000 + CONSENSUS_MAX_SLEEP_TIME * (1 + CONSENSUS_LOOPS_TO_FINISH)
@@ -95,15 +99,15 @@ class ExoNodeTester extends FlatSpec with BeforeAndAfter {
     launchNNodes(4)
 
     //kill analyser
-    writeToSpace(analyserNode.nodeId, KillSignal)
-    Thread.sleep(5 * 1000 + TABLE_LEASE_TIME)
+    killNodesById(List(analyserNode.nodeId))
+    Thread.sleep(5 * 1000)
     Thread.sleep(EXPECTED_TIME_TO_CONSENSUS)
     assert(readTableFromSpace().isDefined)
   }
 
   {
     CliftonNode.DEBUG = true
-    for (n <- 30 to 1 by -1) {
+    for (n <- 20 to 1 by -1) {
       s"Only 1 analyser with $n nodes" should "check if there is only one analyser in the space" in {
         only1Analyser(n)
       }

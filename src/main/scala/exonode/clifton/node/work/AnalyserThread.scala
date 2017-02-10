@@ -3,8 +3,8 @@ package exonode.clifton.node.work
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import com.zink.fly.NotifyHandler
-import exonode.clifton.Protocol._
+import exonode.clifton.config.BackupConfig
+import exonode.clifton.config.Protocol._
 import exonode.clifton.node._
 import exonode.clifton.node.entries.{BackupInfoEntry, ExoEntry}
 
@@ -19,7 +19,7 @@ import scala.language.implicitConversions
   * are processing some activity. Analyser Node it's one of the modes of what a clifton node
   * can be transformed.
   */
-class AnalyserThread(analyserId: String) extends Thread with BusyWorking with Analyser {
+class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) extends Thread with BusyWorking with Analyser {
 
   //the number of entries to be taken from space from a defined time
   private val MAX_INFO_CALL = 20
@@ -41,7 +41,7 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
   override def threadIsBusy = true
 
   private def reloadGraphs(distributionTable: TableType): TableType = {
-    graphsChanged = false
+    //    graphsChanged = false
     val graphs = signalSpace.readMany(templateGraph, MAX_GRAPHS)
     (for {
       graph <- graphs
@@ -56,19 +56,20 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
     }).toSeq
   }
 
-  private var graphsChanged: Boolean = false
+  //  private var graphsChanged: Boolean = false
 
-  private object GraphChangeNotifier extends NotifyHandler {
-    override def templateMatched(): Unit = graphsChanged = true
-  }
+  //  private object GraphChangeNotifier extends NotifyHandler {
+  //    override def templateMatched(): Unit = graphsChanged = true
+  //  }
 
   private var cancel = false
 
   override def cancelThread(): Unit = cancel = true
 
   override def run(): Unit = {
-    val writeRenewer = new NotifyWriteRenewer(signalSpace, templateGraph, GraphChangeNotifier, NOTIFY_GRAPHS_ANALYSER_TIME)
-    val takeRenewer = new NotifyTakeRenewer(signalSpace, templateGraph, GraphChangeNotifier, NOTIFY_GRAPHS_ANALYSER_TIME)
+    // Sometimes the notify fails so we will not use them for now
+    //    val writeRenewer = new NotifyWriteRenewer(signalSpace, templateGraph, GraphChangeNotifier, NOTIFY_GRAPHS_ANALYSER_TIME)
+    //    val takeRenewer = new NotifyTakeRenewer(signalSpace, templateGraph, GraphChangeNotifier, NOTIFY_GRAPHS_ANALYSER_TIME)
     try {
       val trackerTable: TrackerTableType = Nil
       val initialTable = reloadGraphs(EMPTY_TABLE)
@@ -79,9 +80,9 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
       val backupsTable: TableBackupType = new HashMap[(String, String), Long]()
       readInfosFromSpace(currentTime, currentTime, currentTime, trackerTable, initialTable, backupsTable)
     } catch {
-      case e: Throwable =>
-        writeRenewer.cancel()
-        takeRenewer.cancel()
+      case _: Throwable =>
+      //        writeRenewer.cancel()
+      //        takeRenewer.cancel()
     }
   }
 
@@ -89,7 +90,7 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
     val (_, actId, injId) = info
     val backupEntry = (actId, injId)
     if (backupTable.contains(backupEntry)) {
-      backupTable.updated(backupEntry, System.currentTimeMillis() + BACKUP_MAX_LIVE_TIME)
+      backupTable.updated(backupEntry, System.currentTimeMillis() + backupConfig.BACKUP_TIMEOUT_TIME)
     } else backupTable
   }
 
@@ -99,7 +100,7 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
     if (table.contains(infoBackup))
       table
     else
-      table.updated(infoBackup, System.currentTimeMillis() + BACKUP_MAX_LIVE_TIME)
+      table.updated(infoBackup, System.currentTimeMillis() + backupConfig.BACKUP_TIMEOUT_TIME)
   }
 
   private def convertToData(backup: ((String, String), Long)): BackupInfoEntry = {
@@ -155,7 +156,7 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
 
       val (updatedDistributionTable, updatedGraphsChangedTime) = {
         val distTable = updateDistributionTable(trackerTable, originalDistributionTable, currentTime)
-        if (graphsChanged || currentTime - graphsChangedTime > ANALYSER_CHECK_GRAPHS)
+        if (currentTime - graphsChangedTime > ANALYSER_CHECK_GRAPHS)
           (reloadGraphs(distTable), currentTime)
         else
           (distTable, graphsChangedTime)
@@ -163,7 +164,7 @@ class AnalyserThread(analyserId: String) extends Thread with BusyWorking with An
 
       // Update backup information
       val (updatedBackupsTable, newBackupsTime) =
-        if (currentTime - backupsTime > ANALYSER_CHECK_BACKUP_INFO) {
+        if (currentTime - backupsTime > backupConfig.ANALYSER_CHECK_BACKUP_INFO) {
           val maxNodes = originalDistributionTable.size
           val backupInfos = dataSpace.readMany(templateBackup, updatedTrackerTable.size * maxNodes)
           val notFilterBackupTable = backupInfos.foldLeft(newBackupTable)((table, info) => updateBackup(table, info))

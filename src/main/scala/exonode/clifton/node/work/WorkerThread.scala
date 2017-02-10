@@ -1,9 +1,10 @@
 package exonode.clifton.node.work
 
-import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 import java.io.Serializable
+import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 
-import exonode.clifton.Protocol._
+import exonode.clifton.config.BackupConfig
+import exonode.clifton.config.Protocol._
 import exonode.clifton.node.entries.DataEntry
 import exonode.clifton.node.{CliftonNode, Log, SpaceCache}
 
@@ -11,7 +12,7 @@ import exonode.clifton.node.{CliftonNode, Log, SpaceCache}
   * This thread is continually running till be shutdown
   * it process the input at the same that allows the node to handle signals
   */
-class WorkerThread(node: CliftonNode) extends Thread with BusyWorking with Worker {
+class WorkerThread(node: CliftonNode)(implicit backupConfig: BackupConfig) extends Thread with BusyWorking with Worker {
 
   private val dataSpace = SpaceCache.getDataSpace
 
@@ -84,8 +85,8 @@ class WorkerThread(node: CliftonNode) extends Thread with BusyWorking with Worke
 
     //clear Backups
     for (dataEntry <- dataEntries) {
-      dataSpace.takeMany(dataEntry.createBackup(), MAX_BACKUPS_IN_SPACE)
-      dataSpace.takeMany(dataEntry.createInfoBackup(), MAX_BACKUPS_IN_SPACE)
+      dataSpace.takeMany(dataEntry.createBackup(), backupConfig.MAX_BACKUPS_IN_SPACE)
+      dataSpace.takeMany(dataEntry.createInfoBackup(), backupConfig.MAX_BACKUPS_IN_SPACE)
     }
   }
 

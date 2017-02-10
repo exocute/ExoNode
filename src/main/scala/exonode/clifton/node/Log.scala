@@ -1,6 +1,6 @@
 package exonode.clifton.node
 
-import exonode.clifton.Protocol._
+import exonode.clifton.config.Protocol._
 import exonode.clifton.node.entries.ExoEntry
 import exonode.clifton.signals.LoggingSignal
 
