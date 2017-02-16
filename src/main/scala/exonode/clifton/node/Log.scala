@@ -7,8 +7,8 @@ import exonode.clifton.signals.LoggingSignal
 /**
   * Created by #ScalaTeam on 20/12/2016.
   *
-  * responsible for updating the log file with most relevant info
-  * it allows two different writes INFO and ERROR
+  * Responsible for writing logs in the space.
+  * It allows for different level of logs: INFO, WARN and ERROR
   */
 object Log {
 
@@ -16,6 +16,10 @@ object Log {
 
   case object Info extends LogLevel {
     override def toString: String = "INFO"
+  }
+
+  case object Warn extends LogLevel {
+    override def toString: String = "WARN"
   }
 
   case object Error extends LogLevel {
@@ -30,6 +34,8 @@ object Log {
   }
 
   def info(id: String, msg: String): Unit = sendMessage(id, msg, Info)
+
+  def warn(id: String, msg: String): Unit = sendMessage(id, msg, Warn)
 
   def error(id: String, msg: String): Unit = sendMessage(id, formatMessage(msg), Error)
 

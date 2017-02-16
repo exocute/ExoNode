@@ -3,8 +3,8 @@ package exonode.clifton.node
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 import java.util.{Date, UUID}
 
-import exonode.clifton.config.Protocol._
 import exonode.clifton.config.BackupConfig
+import exonode.clifton.config.Protocol._
 import exonode.clifton.node.CliftonNode._
 import exonode.clifton.node.entries.{DataEntry, ExoEntry}
 import exonode.clifton.node.work.{ConsecutiveWork, _}
@@ -20,7 +20,7 @@ import scala.util.Random
   * Analyser is responsible for updating the space with the table about the state of every node using the same signal space
   * Worker is responsible for processing input for some activity
   */
-class CliftonNode(implicit backupConfig: BackupConfig) extends Thread {
+class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node {
 
   val nodeId: String = UUID.randomUUID().toString
 
@@ -29,7 +29,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread {
 
   private class KillSignalException extends Exception
 
-  @inline private def debug(msg: String, writeToLog: Boolean = true) = {
+  private def debug(msg: String, writeToLog: Boolean = true) = {
     if (DEBUG) {
       println(new Date().toString, nodeId, msg)
       if (writeToLog)
@@ -516,8 +516,8 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread {
       signalSpace.read(templateAct, ENTRY_READ_TIME) match {
         case None =>
           println(s"$nodeFullId;ActivitySignal for activity $activityId not found in SignalSpace")
-          Log.error(nodeFullId, s"ActivitySignal for activity $activityId not found in SignalSpace")
-          Thread.sleep(ACT_NOT_FOUND_SLEEP_TIME)
+          Log.warn(nodeFullId, s"ActivitySignal for activity $activityId not found in SignalSpace")
+          Thread.sleep(ERROR_SLEEP_TIME)
         case Some(entry) => entry.payload match {
           case activitySignal: ActivitySignal =>
             ActivityCache.getActivity(activitySignal.name) match {
@@ -537,8 +537,8 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread {
                 sleepTime = NODE_MIN_SLEEP_TIME
               case None =>
                 println(nodeFullId + ";Class could not be loaded: " + activitySignal.name)
-                Log.error(nodeFullId, "Class could not be loaded: " + activitySignal.name)
-                Thread.sleep(ACT_NOT_FOUND_SLEEP_TIME)
+                Log.warn(nodeFullId, "Class could not be loaded: " + activitySignal.name)
+                Thread.sleep(ERROR_SLEEP_TIME)
             }
         }
       }

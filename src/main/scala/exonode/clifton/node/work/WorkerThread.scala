@@ -6,13 +6,13 @@ import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 import exonode.clifton.config.BackupConfig
 import exonode.clifton.config.Protocol._
 import exonode.clifton.node.entries.DataEntry
-import exonode.clifton.node.{CliftonNode, Log, SpaceCache}
+import exonode.clifton.node.{Log, Node, SpaceCache}
 
 /**
   * This thread is continually running till be shutdown
   * it process the input at the same that allows the node to handle signals
   */
-class WorkerThread(node: CliftonNode)(implicit backupConfig: BackupConfig) extends Thread with BusyWorking with Worker {
+class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thread with BusyWorking with Worker {
 
   private val dataSpace = SpaceCache.getDataSpace
 
@@ -44,11 +44,11 @@ class WorkerThread(node: CliftonNode)(implicit backupConfig: BackupConfig) exten
       case e: RuntimeException =>
         val msg = "Message: " + e.getCause + ", " + e.getStackTrace.mkString(", ")
         println(nodeId + ";" + msg)
-        Log.error(nodeId, msg)
+        Log.warn(nodeId, msg)
       case e: Throwable =>
         val msg = "Message: " + e.getMessage
         println(nodeId + ";" + msg)
-        Log.error(nodeId, msg)
+        Log.warn(nodeId, msg)
     }
   }
 

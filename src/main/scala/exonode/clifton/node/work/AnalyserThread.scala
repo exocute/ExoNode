@@ -103,14 +103,12 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
       table.updated(infoBackup, System.currentTimeMillis() + backupConfig.BACKUP_TIMEOUT_TIME)
   }
 
-  private def convertToData(backup: ((String, String), Long)): BackupInfoEntry = {
-    backup match {
-      case ((to, injId), _) => BackupInfoEntry(to, null, injId)
-    }
+  private def convertToData(activityTo: String, injectId: String): BackupInfoEntry = {
+    BackupInfoEntry(activityTo, null, injectId)
   }
 
-  private def recoveryData(backup: ((String, String), Long)): Unit = {
-    val backupInfoTemplate = convertToData(backup)
+  private def recoveryData(activityTo: String, injectId: String): Unit = {
+    val backupInfoTemplate = convertToData(activityTo, injectId)
 
     def recoverNextEntry(): Unit = {
       dataSpace.take(backupInfoTemplate, ENTRY_READ_TIME) match {
@@ -120,9 +118,10 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
           dataSpace.take(backupEntryTemplate, ENTRY_READ_TIME) match {
             case None =>
               // information was lost
-              Log.error(s"$analyserId($ANALYSER_MARKER)", s"Data with inject id ${backupEntryTemplate.injectId} wasn't recoverable")
+              Log.error(s"$analyserId($ANALYSER_MARKER)", s"Data with inject id $injectId for activity $activityTo wasn't recoverable")
             case Some(backupEntry) =>
               dataSpace.write(backupEntry.createDataEntry(), DATA_LEASE_TIME)
+              Log.warn(s"$analyserId($ANALYSER_MARKER)", s"Data with inject id $injectId for activity $activityTo was recovered successfully")
           }
           recoverNextEntry()
       }
@@ -169,8 +168,8 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
           val backupInfos = dataSpace.readMany(templateBackup, updatedTrackerTable.size * maxNodes)
           val notFilterBackupTable = backupInfos.foldLeft(newBackupTable)((table, info) => updateBackup(table, info))
           val (expiredBackups, backupTable) = notFilterBackupTable.partition(_._2 < currentTime)
-          for (backup <- expiredBackups)
-            recoveryData(backup)
+          for (((activityTo, injectId), _) <- expiredBackups)
+            recoveryData(activityTo, injectId)
           (backupTable, currentTime)
         } else
           (newBackupTable, backupsTime)

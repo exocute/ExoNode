@@ -59,12 +59,15 @@ object Protocol {
   val NODE_MIN_SLEEP_TIME: Long = getOrDefault("NODE_MIN_SLEEP_TIME", 250)
   val NODE_STEP_SLEEP_TIME: Long = getOrDefault("NODE_STEP_SLEEP_TIME", 250)
   val NODE_MAX_SLEEP_TIME: Long = getOrDefault("NODE_MAX_SLEEP_TIME", 5 * 1000)
-  val ACT_NOT_FOUND_SLEEP_TIME: Long = getOrDefault("ACT_NOT_FOUND_SLEEP_TIME", 30 * 1000)
   val ANALYSER_SLEEP_TIME: Long = getOrDefault("ANALYSER_SLEEP_TIME", 5 * 1000)
+  val ANALYSER_HANDLE_SIGNALS_TIME: Long = getOrDefault("ANALYSER_HANDLE_SIGNALS_TIME", 5 * 1000)
+  val ERROR_SLEEP_TIME: Long = getOrDefault("ERROR_SLEEP_TIME", 30 * 1000)
 
   // Consensus constants
   val CONSENSUS_ENTRIES_TO_READ: Int = getOrDefault("CONSENSUS_ENTRIES_TO_READ", 3).toInt
   val CONSENSUS_LOOPS_TO_FINISH: Int = getOrDefault("CONSENSUS_LOOPS_TO_FINISH", 3).toInt
+
+  val CONSENSUS_TEST_TABLE_EXIST_TIME: Long = getOrDefault("CONSENSUS_TEST_TABLE_EXIST_TIME", 2 * 1000)
 
   // (should change with the amount of nodes in space: more nodes -> more time)
   val CONSENSUS_WANT_TBA_LEASE_TIME: Long = getOrDefault("CONSENSUS_WANT_TBA_LEASE_TIME", 1 * MIN)
