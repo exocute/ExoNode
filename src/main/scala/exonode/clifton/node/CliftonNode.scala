@@ -6,9 +6,10 @@ import java.util.{Date, UUID}
 import exonode.clifton.config.BackupConfig
 import exonode.clifton.config.Protocol._
 import exonode.clifton.node.CliftonNode._
+import exonode.clifton.node.Log.{INFO, ERROR, WARN, ND}
 import exonode.clifton.node.entries.{DataEntry, ExoEntry}
 import exonode.clifton.node.work.{ConsecutiveWork, _}
-import exonode.clifton.signals.{ActivitySignal, KillGracefullSignal, KillSignal, NodeSignal}
+import exonode.clifton.signals._
 
 import scala.util.Random
 
@@ -33,7 +34,8 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     if (DEBUG) {
       println(new Date().toString, nodeId, msg)
       if (writeToLog)
-        Log.info(nodeId, msg)
+        ???
+      //Log.info(nodeId, msg)
     }
   }
 
@@ -84,7 +86,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
 
     val bootMessage = s"Node is ready to start"
     println(s"$nodeFullId;$bootMessage")
-    Log.info(nodeFullId, bootMessage)
+    Log.receiveLog(LoggingSignal(STARTED_NODE, INFO, nodeId, ND, ND, UNDEFINED_ACT_ID, ND, bootMessage, 0))
     try {
       while (true) {
         handleSignals()
@@ -228,7 +230,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
 
       val analyserBootMessage = "Node changed to analyser mode"
       println(s"$nodeFullId;$analyserBootMessage")
-      Log.info(nodeFullId, analyserBootMessage)
+      Log.receiveLog(LoggingSignal(CHANGED_ACT, INFO, nodeId, ND, UNDEFINED_ACT_ID, ANALYSER_MARKER, ND, analyserBootMessage, 0))
 
       while (true) {
         handleSignals()
@@ -285,7 +287,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     def killOwnSignal(): Unit = {
       val shutdownMsg = "Node is going to shutdown"
       println(s"$nodeFullId;$shutdownMsg")
-      Log.info(nodeFullId, shutdownMsg)
+      Log.receiveLog(LoggingSignal(NODE_SHUTDOWN, INFO, nodeId, ND, ND, ND, ND, s"$nodeFullId;$shutdownMsg", 0))
       processing match {
         case None =>
         case Some(analyserThread: Analyser) =>
@@ -328,7 +330,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
               val msg = s"Data was missing with injectId=${values.head.injectId}, " +
                 s"${values.size} values found, ${joinWork.actsFrom.size} values expected"
               println(nodeFullId + ";" + msg)
-              Log.error(nodeFullId, msg)
+              Log.receiveLog(LoggingSignal(VALUES_LOST, ERROR, nodeId, ND, ND, ND, ND, msg, 0))
             }
         }
         true
@@ -516,7 +518,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
       signalSpace.read(templateAct, ENTRY_READ_TIME) match {
         case None =>
           println(s"$nodeFullId;ActivitySignal for activity $activityId not found in SignalSpace")
-          Log.warn(nodeFullId, s"ActivitySignal for activity $activityId not found in SignalSpace")
+          Log.receiveLog(LoggingSignal(ACTIVITY_NOT_FOUND, WARN, nodeId, ND, activityId, ND, ND, s"$nodeFullId;ActivitySignal for activity $activityId not found in SignalSpace", 0))
           Thread.sleep(ERROR_SLEEP_TIME)
         case Some(entry) => entry.payload match {
           case activitySignal: ActivitySignal =>
@@ -525,7 +527,9 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
                 templateUpdateAct = templateUpdateAct.setPayload((nodeId, activityId, NOT_PROCESSING_MARKER))
                 templateData = DataEntry(activityId, null, null, null)
                 val activityWorker = new ActivityWorker(activityId, activity, activitySignal.params, activitySignal.outMarkers)
-                Log.info(nodeFullId, s"Node changed to $activityId")
+                if (worker.hasWork)
+                  Log.receiveLog(LoggingSignal(CHANGED_ACT, INFO, nodeId, ND, worker.activity.id, activityId, ND, s"Node changed to $activityId", 0))
+                else Log.receiveLog(LoggingSignal(CHANGED_ACT, INFO, nodeId, ND, UNDEFINED_ACT_ID, activityId, ND, s"Node changed to $activityId", 0))
                 activitySignal.inMarkers match {
                   case Vector(_) =>
                     worker = ConsecutiveWork(activityWorker)
@@ -537,7 +541,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
                 sleepTime = NODE_MIN_SLEEP_TIME
               case None =>
                 println(nodeFullId + ";Class could not be loaded: " + activitySignal.name)
-                Log.warn(nodeFullId, "Class could not be loaded: " + activitySignal.name)
+                Log.receiveLog(LoggingSignal(CLASS_NOT_LOADED, WARN, nodeId, ND, ND, ND, ND, "Class could not be loaded: " + activitySignal.name, 0))
                 Thread.sleep(ERROR_SLEEP_TIME)
             }
         }

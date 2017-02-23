@@ -5,8 +5,11 @@ import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 
 import exonode.clifton.config.BackupConfig
 import exonode.clifton.config.Protocol._
+import exonode.clifton.node.Log.{INFO, ND}
 import exonode.clifton.node.entries.DataEntry
 import exonode.clifton.node.{Log, Node, SpaceCache}
+import exonode.clifton.signals.LoggingSignal
+import exonode.clifton.node.Log.{INFO, ERROR, WARN, ND}
 
 /**
   * This thread is continually running till be shutdown
@@ -44,18 +47,23 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
       case e: RuntimeException =>
         val msg = "Message: " + e.getCause + ", " + e.getStackTrace.mkString(", ")
         println(nodeId + ";" + msg)
-        Log.warn(nodeId, msg)
+        Log.receiveLog(LoggingSignal(ERROR_PROCESSING,WARN,nodeId,ND,ND,ND,ND,msg,0))
+
       case e: Throwable =>
         val msg = "Message: " + e.getMessage
         println(nodeId + ";" + msg)
-        Log.warn(nodeId, msg)
+        Log.receiveLog(LoggingSignal(ERROR_PROCESSING,WARN,nodeId,ND,ND,ND,ND,msg,0))
     }
+  }
+
+  def getGraphID(s: String): String = {
+    s.split(':').head
   }
 
   def process(activity: ActivityWorker, dataEntries: Vector[DataEntry]): Unit = {
     val input: Vector[Serializable] = dataEntries.map(_.data)
     val runningSince = System.currentTimeMillis()
-    Log.info(s"$nodeId(${activity.id})", "Node started processing")
+    Log.receiveLog(LoggingSignal(PROCESSING_INPUT, INFO, nodeId, getGraphID(activity.id), ND, activity.id, dataEntries.head.injectId, "Node started processing",0))
 
     val result = {
       if (input.size == 1)
@@ -63,7 +71,7 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
       else
         activity.process(input)
     }
-    Log.info(s"$nodeId(${activity.id})", s"Node finished processing in ${System.currentTimeMillis() - runningSince}ms")
+    Log.receiveLog(LoggingSignal(FINISHED_PROCESSING, INFO, nodeId, getGraphID(activity.id), activity.id, activity.acsTo.head.split(':').last, dataEntries.head.injectId, s"Node finished processing in ${System.currentTimeMillis() - runningSince}ms",System.currentTimeMillis() - runningSince))
     insertNewResult(result, activity.id, dataEntries, activity.acsTo)
     println(s"$nodeId(${activity.id});Result " + result.toString.take(50) + "...")
   }
