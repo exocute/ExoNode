@@ -31,14 +31,26 @@ object ActivityCache {
           } else
             None
         } catch {
-          case e: Exception => {
+          case e: Exception =>
             e.printStackTrace()
             None
-          }
         }
       case some => some
     }
 
   }
 
+  def getActivityFromLocalFile(fileBytes: Array[Byte], activityName: String): Option[Activity] = {
+    try {
+      val cl = new CliftonClassLoader()
+      cl.init(fileBytes)
+      val activityClass = cl.findClass(activityName)
+      activityClass.newInstance match {
+        case activity: Activity => Some(activity)
+        case None => None
+      }
+    } catch {
+      case e: Exception => None
+    }
+  }
 }

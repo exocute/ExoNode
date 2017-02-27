@@ -22,6 +22,7 @@ object Protocol {
   val NOT_PROCESSING_MARKER = "NOT_PROCESSING"
   val WANT_TO_BE_ANALYSER_MARKER = "WANT_TO_BE_ANALYSER"
 
+  //FIXME add LOGCODE_ to each of this constants
   val STARTED_NODE = 0
   val STARTED_GRAPH = 1
   val CHANGED_ACT = 2
@@ -30,14 +31,13 @@ object Protocol {
   val FAILED = 5
   val DATA_RECOVERED = 6
   val INJECTED = 8
-  val COLLETED = 9
+  val COLLECTED = 9
   val ERROR_PROCESSING = 10
   val NODE_SHUTDOWN = 11
   val VALUES_LOST = 12
   val ACTIVITY_NOT_FOUND = 13
   val CLASS_NOT_LOADED = 14
   val INFORMATION_LOST = 15
-
 
   val ANALYSER_MARKER = "@"
   val UNDEFINED_ACT_ID = "?"

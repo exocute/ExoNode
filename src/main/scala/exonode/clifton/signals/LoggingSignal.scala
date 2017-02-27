@@ -7,7 +7,7 @@ package exonode.clifton.signals
   */
 case class LoggingSignal(code: Int, level: String, nodeID: String,
                          graphID: String, actIDfrom: String, actIDto: String,
-                         injID: String, message: String, time : Long) extends Serializable {
+                         injID: String, message: String, time: Long) {
 
   def setMessage(value: String): LoggingSignal = LoggingSignal(code, level, nodeID, graphID, actIDfrom, actIDto, injID, value, time)
 
