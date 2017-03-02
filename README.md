@@ -6,6 +6,10 @@ Scala Version of ExoNode Plataform
 
 ## News 
 
+02/03/2017 <br />
+--> ExoNode v2 - Delete Graphs available, config file for times <br />
+
+
 16/01/2017 <br />
 --> ExoNode V1 - Allows users to launch a set of nodes into some machine using predifined space host<br />
 --> Nodes are full generic and can be launch in any machine with available resources<br />
