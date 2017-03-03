@@ -9,16 +9,16 @@ import java.io.Serializable
   * injectID is unique for every inject made. This allows to make joins and forks correctly
   * and to track the process in the graph
   */
-case class BackupEntry(toAct: String, fromAct: String, injectId: String, data: Serializable) {
+case class BackupEntry(toAct: String, fromAct: String, injectId: String, orderId: String, data: Option[Serializable]) {
 
-  def setTo(newToAct: String): BackupEntry = BackupEntry(newToAct, fromAct, injectId, data)
+  //  def setTo(newToAct: String): BackupEntry = BackupEntry(newToAct, fromAct, injectId, data)
+  //
+  //  def setFrom(newFromAct: String): BackupEntry = BackupEntry(toAct, newFromAct, injectId, data)
+  //
+  //  def setInjectId(newInjectId: String): BackupEntry = BackupEntry(toAct, fromAct, newInjectId, data)
 
-  def setFrom(newFromAct: String): BackupEntry = BackupEntry(toAct, newFromAct, injectId, data)
+  //  def setData(newData: Serializable): BackupEntry = BackupEntry(toAct, fromAct, injectId, newData)
 
-  def setInjectId(newInjectId: String): BackupEntry = BackupEntry(toAct, fromAct, newInjectId, data)
-
-  def setData(newData: Serializable): BackupEntry = BackupEntry(toAct, fromAct, injectId, newData)
-
-  def createDataEntry(): DataEntry = DataEntry(toAct, fromAct, injectId, data)
+  def createDataEntry(): DataEntry = DataEntry(toAct, fromAct, injectId, orderId, data)
 
 }

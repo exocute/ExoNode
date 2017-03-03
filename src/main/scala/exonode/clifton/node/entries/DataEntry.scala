@@ -9,18 +9,20 @@ import java.io.Serializable
   * injectID is unique for every inject made. This allows to make joins and forks correctly
   * and to track the process in the graph
   */
-case class DataEntry(toAct: String, fromAct: String, injectId: String, data: Serializable) {
+case class DataEntry(toAct: String, fromAct: String, injectId: String, orderId: String, data: Option[Serializable]) {
 
-  def setTo(newToAct: String): DataEntry = DataEntry(newToAct, fromAct, injectId, data)
+  def setTo(newToAct: String): DataEntry = DataEntry(newToAct, fromAct, injectId, orderId, data)
 
-  def setFrom(newFromAct: String): DataEntry = DataEntry(toAct, newFromAct, injectId, data)
+  def setFrom(newFromAct: String): DataEntry = DataEntry(toAct, newFromAct, injectId, orderId, data)
 
-  def setInjectId(newInjectId: String): DataEntry = DataEntry(toAct, fromAct, newInjectId, data)
+  def setInjectId(newInjectId: String): DataEntry = DataEntry(toAct, fromAct, newInjectId, orderId, data)
 
-  def setData(newData: Serializable): DataEntry = DataEntry(toAct, fromAct, injectId, newData)
+  def setOrderId(newOrderId: String): DataEntry = DataEntry(toAct, fromAct, injectId, newOrderId, data)
 
-  def createBackup(): BackupEntry = BackupEntry(toAct, fromAct, injectId, data)
+  def setData(newData: Option[Serializable]): DataEntry = DataEntry(toAct, fromAct, injectId, orderId, newData)
 
-  def createInfoBackup(): BackupInfoEntry = BackupInfoEntry(toAct, fromAct, injectId)
+  def createBackup(): BackupEntry = BackupEntry(toAct, fromAct, injectId, orderId, data)
+
+  def createInfoBackup(): BackupInfoEntry = BackupInfoEntry(toAct, fromAct, orderId, injectId)
 
 }

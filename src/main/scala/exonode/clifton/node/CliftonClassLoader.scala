@@ -11,6 +11,7 @@ import scala.collection.mutable
 
 class CliftonClassLoader extends ClassLoader(getClass.getClassLoader) {
 
+  private val CLASS_EXTENSION = ".class"
   private val classByteCodes = new mutable.HashMap[String, Array[Byte]]()
 
   def init(jar: Array[Byte]): Unit = {
@@ -31,7 +32,7 @@ class CliftonClassLoader extends ClassLoader(getClass.getClassLoader) {
         je != null
       }) {
         // only load the classes
-        if (je.getName.endsWith(".class")) {
+        if (je.getName.endsWith(CLASS_EXTENSION)) {
           var entrySize = je.getSize.toInt
 
           // Jar is probably compressed, so we don't know the size of
@@ -69,8 +70,13 @@ class CliftonClassLoader extends ClassLoader(getClass.getClassLoader) {
           // implementations
           // of the class loader i.e. '.' not '/' and trim the .class
           // from the
-          // end - if (className.endsWith(".class"))
-          val className = je.getName.replace('/', '.').replaceAll("\\.class", "")
+          val className = {
+            val name = je.getName.replace('/', '.')
+            if (name.endsWith(CLASS_EXTENSION))
+              name.substring(0, name.length - CLASS_EXTENSION.length)
+            else
+              name
+          }
           classByteCodes.put(className, byteCode)
         }
       }
@@ -82,7 +88,7 @@ class CliftonClassLoader extends ClassLoader(getClass.getClassLoader) {
   override def loadClass(name: String): Class[_] = {
     if (name.startsWith("com.exocute.clifton.node")
       || name.startsWith("com.zink.fly")) {
-      val newName: String = name.replace('.', '/').concat(".class")
+      val newName: String = name.replace('.', '/').concat(CLASS_EXTENSION)
       // URL url = getParent().getResource(newName)
       val resourceStream: InputStream = getParent.getResourceAsStream(newName)
       try {

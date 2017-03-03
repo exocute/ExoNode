@@ -68,9 +68,9 @@ object SpaceCache {
 
     clean(getJarSpace, FlyJarEntry(null, null))
     clean(getJarSpace, FlyClassEntry(null, null))
-    clean(getDataSpace, DataEntry(null, null, null, null))
-    clean(getDataSpace, BackupEntry(null, null, null, null))
-    clean(getDataSpace, BackupInfoEntry(null, null, null))
+    clean(getDataSpace, DataEntry(null, null, null, null, null))
+    clean(getDataSpace, BackupEntry(null, null, null, null, null))
+    clean(getDataSpace, BackupInfoEntry(null, null, null, null))
     clean(getSignalSpace, ExoEntry(null, null))
   }
 }

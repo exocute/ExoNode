@@ -6,7 +6,7 @@ import java.util.{Date, UUID}
 import exonode.clifton.config.BackupConfig
 import exonode.clifton.config.Protocol._
 import exonode.clifton.node.CliftonNode._
-import exonode.clifton.node.Log.{INFO, ERROR, WARN, ND}
+import exonode.clifton.node.Log.{ERROR, INFO, ND, WARN}
 import exonode.clifton.node.entries.{DataEntry, ExoEntry}
 import exonode.clifton.node.work.{ConsecutiveWork, _}
 import exonode.clifton.signals._
@@ -57,8 +57,8 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     //templates to search in spaces
     var templateAct = ExoEntry("", null)
     val templateTable = ExoEntry(TABLE_MARKER, null)
-    var templateData: DataEntry = DataEntry(null, null, null, null)
-    var templateUpdateAct = ExoEntry(INFO_MARKER, (nodeId, UNDEFINED_ACT_ID, NOT_PROCESSING_MARKER))
+    var templateData: DataEntry = DataEntry(null, null, null, null, null)
+    var templateUpdateAct = ExoEntry(INFO_MARKER, (nodeId, UNDEFINED_ACT_ID, NOT_PROCESSING_MARKER, ""))
     val templateMySignals = ExoEntry(nodeId, null)
     val templateNodeSignals = ExoEntry(NODE_SIGNAL_MARKER, null)
     val templateWantToBeAnalyser = ExoEntry(WANT_TO_BE_ANALYSER_MARKER, null)
@@ -84,7 +84,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
       s"$nodeId($fromId)"
     }
 
-    val bootMessage = s"Node is ready to start"
+    val bootMessage = s"Node started"
     println(s"$nodeFullId;$bootMessage")
     Log.receiveLog(LoggingSignal(STARTED_NODE, INFO, nodeId, ND, ND, UNDEFINED_ACT_ID, ND, bootMessage, 0))
     try {
@@ -287,7 +287,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     def killOwnSignal(): Unit = {
       val shutdownMsg = "Node is going to shutdown"
       println(s"$nodeFullId;$shutdownMsg")
-      Log.receiveLog(LoggingSignal(NODE_SHUTDOWN, INFO, nodeId, ND, ND, ND, ND, s"$nodeFullId;$shutdownMsg", 0))
+      Log.receiveLog(LoggingSignal(NODE_SHUTDOWN, INFO, nodeId, ND, ND, ND, ND, shutdownMsg, 0))
       processing match {
         case None =>
         case Some(analyserThread: Analyser) =>
@@ -409,7 +409,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
             workerThread
         }
       workerThread.sendInput(activity, dataEntries)
-      templateUpdateAct = templateUpdateAct.setPayload(nodeId, activity.id, dataEntries.head.injectId)
+      templateUpdateAct = templateUpdateAct.setPayload(nodeId, activity.id, dataEntries.head.injectId, dataEntries.head.orderId)
 
       var initProcessTime = System.currentTimeMillis()
       var initDataProcessTime = System.currentTimeMillis()
@@ -433,7 +433,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
           // So, back to normal mode
         }
       }
-      templateUpdateAct = templateUpdateAct.setPayload(nodeId, activity.id, NOT_PROCESSING_MARKER)
+      templateUpdateAct = templateUpdateAct.setPayload(nodeId, activity.id, NOT_PROCESSING_MARKER, "")
     }
 
     /**
@@ -524,12 +524,14 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
           case activitySignal: ActivitySignal =>
             ActivityCache.getActivity(activitySignal.name) match {
               case Some(activity) =>
-                templateUpdateAct = templateUpdateAct.setPayload((nodeId, activityId, NOT_PROCESSING_MARKER))
-                templateData = DataEntry(activityId, null, null, null)
-                val activityWorker = new ActivityWorker(activityId, activity, activitySignal.params, activitySignal.outMarkers)
-                if (worker.hasWork)
-                  Log.receiveLog(LoggingSignal(CHANGED_ACT, INFO, nodeId, ND, worker.activity.id, activityId, ND, s"Node changed to $activityId", 0))
-                else Log.receiveLog(LoggingSignal(CHANGED_ACT, INFO, nodeId, ND, UNDEFINED_ACT_ID, activityId, ND, s"Node changed to $activityId", 0))
+                templateUpdateAct = templateUpdateAct.setPayload((nodeId, activityId, NOT_PROCESSING_MARKER, ""))
+                templateData = DataEntry(activityId, null, null, null, null)
+                val activityWorker =
+                  new ActivityWorker(activityId, activitySignal.actType, activity,
+                    activitySignal.params, activitySignal.outMarkers)
+                Log.receiveLog(LoggingSignal(CHANGED_ACT, INFO, nodeId, ND,
+                  if (worker.hasWork) worker.activity.id else UNDEFINED_ACT_ID,
+                  activityId, ND, s"Node changed to $activityId", 0))
                 activitySignal.inMarkers match {
                   case Vector(_) =>
                     worker = ConsecutiveWork(activityWorker)
@@ -550,7 +552,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
 
     def setNeutralMode(): Unit = {
       worker = NoWork
-      templateUpdateAct = templateUpdateAct.setPayload((nodeId, UNDEFINED_ACT_ID, NOT_PROCESSING_MARKER))
+      templateUpdateAct = templateUpdateAct.setPayload((nodeId, UNDEFINED_ACT_ID, NOT_PROCESSING_MARKER, ""))
       updateNodeInfo(force = true)
     }
   }

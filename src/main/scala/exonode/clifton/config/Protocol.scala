@@ -48,8 +48,8 @@ object Protocol {
   lazy val EMPTY_TABLE: TableType = HashMap[String, Int]()
   //(activityId, number of activities)
   type TableEntryType = (String, Int)
-  //(nodeId, activityId, injectID)
-  type NodeInfoType = (String, String, String)
+  //(nodeId, activityId, injectID, orderId)
+  type NodeInfoType = (String, String, String, String)
   //(graphId, list of activity ids)
   type GraphEntryType = (String, Vector[String])
 

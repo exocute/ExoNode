@@ -5,8 +5,8 @@ import java.util.Date
 
 import exonode.clifton.config.BackupConfig
 import exonode.clifton.config.Protocol._
+import exonode.clifton.node.Log.{ERROR, ND, WARN}
 import exonode.clifton.node._
-import exonode.clifton.node.Log.{INFO, ERROR, WARN, ND}
 import exonode.clifton.node.entries.{BackupInfoEntry, ExoEntry}
 import exonode.clifton.signals.LoggingSignal
 
@@ -33,12 +33,12 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
   private type TrackerEntryType = (NodeInfoType, Long)
   private type TrackerTableType = List[TrackerEntryType]
   //((actID, injID)), time)
-  private type TableBackupType = HashMap[(String, String), Long]
+  private type TableBackupType = HashMap[(String, String, String), Long]
 
   private val templateInfo = ExoEntry(INFO_MARKER, null)
   private val templateTable = ExoEntry(TABLE_MARKER, null)
   private val templateGraph = ExoEntry(GRAPH_MARKER, null)
-  private val templateBackup = BackupInfoEntry(null, null, null)
+  private val templateBackup = BackupInfoEntry(null, null, null, null)
 
   override def threadIsBusy = true
 
@@ -79,7 +79,7 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
       signalSpace.take(templateTable, ENTRY_READ_TIME)
       signalSpace.write(entryTable, TABLE_LEASE_TIME)
       val currentTime = System.currentTimeMillis()
-      val backupsTable: TableBackupType = new HashMap[(String, String), Long]()
+      val backupsTable: TableBackupType = new HashMap[(String, String, String), Long]()
       readInfosFromSpace(currentTime, currentTime, currentTime, trackerTable, initialTable, backupsTable)
     } catch {
       case _: Throwable =>
@@ -89,8 +89,8 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
   }
 
   private def updateBackupTable(backupTable: TableBackupType, info: NodeInfoType): TableBackupType = {
-    val (_, actId, injId) = info
-    val backupEntry = (actId, injId)
+    val (_, actId, injectId, orderId) = info
+    val backupEntry = (actId, injectId, orderId)
     if (backupTable.contains(backupEntry)) {
       backupTable.updated(backupEntry, System.currentTimeMillis() + backupConfig.BACKUP_TIMEOUT_TIME)
     } else backupTable
@@ -98,19 +98,19 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
 
 
   private def updateBackup(table: TableBackupType, info: BackupInfoEntry): TableBackupType = {
-    val infoBackup = (info.toAct, info.injectId)
+    val infoBackup = (info.toAct, info.injectId, info.orderId)
     if (table.contains(infoBackup))
       table
     else
       table.updated(infoBackup, System.currentTimeMillis() + backupConfig.BACKUP_TIMEOUT_TIME)
   }
 
-  private def convertToData(activityTo: String, injectId: String): BackupInfoEntry = {
-    BackupInfoEntry(activityTo, null, injectId)
+  private def convertToData(activityTo: String, injectId: String, orderId: String): BackupInfoEntry = {
+    BackupInfoEntry(activityTo, null, injectId, orderId)
   }
 
-  private def recoveryData(activityTo: String, injectId: String): Unit = {
-    val backupInfoTemplate = convertToData(activityTo, injectId)
+  private def recoveryData(activityTo: String, injectId: String, orderId: String): Unit = {
+    val backupInfoTemplate = convertToData(activityTo, injectId, orderId)
 
     def recoverNextEntry(): Unit = {
       dataSpace.take(backupInfoTemplate, ENTRY_READ_TIME) match {
@@ -170,8 +170,8 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
           val backupInfos = dataSpace.readMany(templateBackup, updatedTrackerTable.size * maxNodes)
           val notFilterBackupTable = backupInfos.foldLeft(newBackupTable)((table, info) => updateBackup(table, info))
           val (expiredBackups, backupTable) = notFilterBackupTable.partition(_._2 < currentTime)
-          for (((activityTo, injectId), _) <- expiredBackups)
-            recoveryData(activityTo, injectId)
+          for (((activityTo, injectId, orderId), _) <- expiredBackups)
+            recoveryData(activityTo, injectId, orderId)
           (backupTable, currentTime)
         } else
           (newBackupTable, backupsTime)
@@ -216,7 +216,7 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
   private def updateTrackerTable(trackerTable: TrackerTableType, newEntry: NodeInfoType, currentTime: Long): TrackerTableType = {
     //updates the table with a new entry
     val expiryTime = NODE_INFO_EXPIRY_TIME + currentTime
-    (newEntry, expiryTime) :: trackerTable.filterNot { case ((id, _, _), _) => id == newEntry._1 }
+    (newEntry, expiryTime) :: trackerTable.filterNot { case ((id, _, _, _), _) => id == newEntry._1 }
   }
 
   /**
@@ -230,7 +230,7 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
     //Cleans the table of dead or busy nodes:
     val groupedByActivity =
       trackerTable
-        .groupBy { case ((_, actId, _), _) => actId }
+        .groupBy { case ((_, actId, _, _), _) => actId }
         .filter { case (actId, _) => actId == UNDEFINED_ACT_ID || distributionTable.contains(actId) }
     val countOfNodesByActivity: Map[String, Int] = groupedByActivity.mapValues(_.size)
 
