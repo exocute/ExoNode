@@ -25,4 +25,6 @@ case class LoggingSignal(code: Int, level: String, nodeID: String,
 
   def setCode(value: Int): LoggingSignal = LoggingSignal(value, level, nodeID, graphID, actIDfrom, actIDto, injID, message, processingTime)
 
+  override def toString: String = s"$level : $message : $nodeID : $graphID : $actIDfrom : $actIDto : $injID : $processingTime"
+
 }

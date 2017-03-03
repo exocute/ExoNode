@@ -518,7 +518,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
       signalSpace.read(templateAct, ENTRY_READ_TIME) match {
         case None =>
           println(s"$nodeFullId;ActivitySignal for activity $activityId not found in SignalSpace")
-          Log.receiveLog(LoggingSignal(ACTIVITY_NOT_FOUND, WARN, nodeId, ND, activityId, ND, ND, s"$nodeFullId;ActivitySignal for activity $activityId not found in SignalSpace", 0))
+          Log.receiveLog(LoggingSignal(ACTIVITY_NOT_FOUND, WARN, nodeId, ND, activityId, ND, ND, s"ActivitySignal for activity $activityId not found in SignalSpace", 0))
           Thread.sleep(ERROR_SLEEP_TIME)
         case Some(entry) => entry.payload match {
           case activitySignal: ActivitySignal =>
@@ -531,7 +531,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
                     activitySignal.params, activitySignal.outMarkers)
                 Log.receiveLog(LoggingSignal(CHANGED_ACT, INFO, nodeId, ND,
                   if (worker.hasWork) worker.activity.id else UNDEFINED_ACT_ID,
-                  activityId, ND, s"Node changed to $activityId", 0))
+                  activityId, ND, "Node changed Activity", 0))
                 activitySignal.inMarkers match {
                   case Vector(_) =>
                     worker = ConsecutiveWork(activityWorker)

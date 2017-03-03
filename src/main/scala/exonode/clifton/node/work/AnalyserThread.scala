@@ -120,10 +120,10 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
           dataSpace.take(backupEntryTemplate, ENTRY_READ_TIME) match {
             case None =>
               // information was lost
-              Log.receiveLog(LoggingSignal(INFORMATION_LOST, ERROR, analyserId, ND, ND, ND, injectId, s"$analyserId($ANALYSER_MARKER)" + s" Data with inject id $injectId for activity $activityTo wasn't recoverable", 0))
+              Log.receiveLog(LoggingSignal(INFORMATION_LOST, ERROR, analyserId, ND, ND, ND, injectId, s" Data with inject id $injectId for activity $activityTo wasn't recoverable", 0))
             case Some(backupEntry) =>
               dataSpace.write(backupEntry.createDataEntry(), DATA_LEASE_TIME)
-              Log.receiveLog(LoggingSignal(DATA_RECOVERED, WARN, analyserId, ND, ND, ND, injectId, s"$analyserId($ANALYSER_MARKER)" + s" Data with inject id $injectId for activity $activityTo was recovered successfully", 0))
+              Log.receiveLog(LoggingSignal(DATA_RECOVERED, WARN, analyserId, ND, ND, ND, injectId, s" Data with inject id $injectId for activity $activityTo was recovered successfully", 0))
           }
           recoverNextEntry()
       }
