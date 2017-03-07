@@ -12,7 +12,7 @@ For more information about the Exonode: http://bit.ly/2mBHBNd
 ## Releases
 
 02/03/2017 <br />
---> ExoNode v1.0 <br />
+--> ***ExoNode v1.0*** <br />
 How to use? <br />
 To launch the app run ExoNode.jar
   ```
