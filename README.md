@@ -3,16 +3,35 @@
 Scala Version of ExoNode Plataform 
 
 -------------------------------------------------------------------------------
+An ExoNode is an amount of logic coded and running in a closed loop inside a single thread which is
+able to interpret the Space it is connected to and to pick-up an Activity and execute it when the
+corresponding inputs are available.
 
-## News 
+For more information about the Exonode: http://bit.ly/2mBHBNd
+
+## Releases
 
 02/03/2017 <br />
---> ExoNode v2 - Delete Graphs available, config file for times <br />
+--> ExoNode v1.0 <br />
+How to use? <br />
+To launch the app run ExoNode.jar
+  ```
+java -jar ExoNode.jar
+```
+Options available: <br />
 
 
-16/01/2017 <br />
---> ExoNode V1 - Allows users to launch a set of nodes into some machine using predifined space host<br />
---> Nodes are full generic and can be launch in any machine with available resources<br />
+
+| Option            | Meaning                                |
+| ---               | ---                                    |
+| `-s`              | sets signal space                      |
+| `-d  `            | sets data space                        |
+| `-j `             | sets jar space                         |
+| `-nodes N `       | launchs N nodes into the space         |
+| `-cleanspaces`    | cleans all the entries for every space | 
+| `--help    `      | display help and exit                  | 
+| `--version`       | ouput version information and exit     | 
+
 
 -------------------------------------------------------------------------------
 
@@ -24,6 +43,6 @@ Scala Version of ExoNode Plataform
 | Software       | Version       | Link                                   |
 | ---------------|:-------------:| --------------------------------------:|
 | Scala          | 12.0.2        |                                        |
-| Java           | 1.8           |                                        |
+| Java           | 1.8           | http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html                                       |
 | FlyObjectSpace | 2.0.2      |  https://github.com/fly-object-space   |
 
