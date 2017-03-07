@@ -22,7 +22,6 @@ java -jar ExoNode.jarb [options]
 Options available: <br />
 
 
-
 | Option            | Meaning                                |
 | ---               | ---                                    |
 | `-s`              | sets signal space                      |
