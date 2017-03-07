@@ -33,11 +33,11 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
   private def debug(msg: String, writeToLog: Boolean = true) = {
     if (DEBUG) {
       println(new Date().toString, nodeId, msg)
-      if (writeToLog)
-        ???
+      //if (writeToLog)
       //Log.info(nodeId, msg)
     }
   }
+
 
   /**
     * Filter the undefined activity from the table
