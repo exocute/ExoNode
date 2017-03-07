@@ -16,7 +16,7 @@ For more information about the Exonode: http://bit.ly/2mBHBNd
 How to use? <br />
 To launch the app run ExoNode.jar
   ```
-java -jar ExoNode.jar
+java -jar ExoNode.jarb [options]
 ```
 Options available: <br />
 
