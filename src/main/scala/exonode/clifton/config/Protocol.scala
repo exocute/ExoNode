@@ -69,7 +69,7 @@ object Protocol {
   val TABLE_UPDATE_TIME: Long = getOrDefault("TABLE_UPDATE_TIME", 2 * 1000)
   val NODE_CHECK_TABLE_TIME: Long = getOrDefault("NODE_CHECK_TABLE_TIME", 30 * 1000)
   val NOTIFY_GRAPHS_ANALYSER_TIME: Long = getOrDefault("NOTIFY_GRAPHS_ANALYSER_TIME", 2 * MIN)
-  val ANALYSER_CHECK_GRAPHS: Long = getOrDefault("ANALYSER_CHECK_GRAPHS", 1 * MIN)
+  val ANALYSER_CHECK_GRAPHS: Long = getOrDefault("ANALYSER_CHECK_GRAPHS", 20 * 1000)
 
   // Other times
   val NODE_INFO_EXPIRY_TIME: Long = getOrDefault("NODE_INFO_EXPIRY_TIME", NODE_CHECK_TABLE_TIME * 2)
@@ -84,7 +84,7 @@ object Protocol {
   val CONSENSUS_ENTRIES_TO_READ: Int = getOrDefault("CONSENSUS_ENTRIES_TO_READ", 3).toInt
   val CONSENSUS_LOOPS_TO_FINISH: Int = getOrDefault("CONSENSUS_LOOPS_TO_FINISH", 3).toInt
 
-  val CONSENSUS_TEST_TABLE_EXIST_TIME: Long = getOrDefault("CONSENSUS_TEST_TABLE_EXIST_TIME", 2 * 1000)
+  val CONSENSUS_TEST_TABLE_EXIST_TIME: Long = getOrDefault("CONSENSUS_TEST_TABLE_EXIST_TIME", 1000)
 
   // (should change with the amount of nodes in space: more nodes -> more time)
   val CONSENSUS_WANT_TBA_LEASE_TIME: Long = getOrDefault("CONSENSUS_WANT_TBA_LEASE_TIME", 1 * MIN)

@@ -2,7 +2,7 @@ package exonode.clifton.config
 
 import java.io.File
 
-import scala.util.Try
+import scala.util.{Success, Try}
 
 /**
   * Created by #ScalaTeam on 09-02-2017.
@@ -28,10 +28,10 @@ object ConfigLoader {
               val (constant, time) = line.splitAt(sign)
               constant.trim -> time.substring(1).trim.toLong
             }
-            if (entry.isSuccess)
-              map + entry.get
-            else
-              map
+            entry match {
+              case Success(value) => map + value
+              case _ => map
+            }
           } else {
             map
           }

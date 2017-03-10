@@ -50,7 +50,7 @@ object ActivityCache {
         case None => None
       }
     } catch {
-      case e: Exception => None
+      case _: Exception => None
     }
   }
 }

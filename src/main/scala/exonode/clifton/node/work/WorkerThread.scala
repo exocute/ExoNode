@@ -88,6 +88,8 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
       }
     }
 
+    //    println(s"Result of $nodeId(${activity.id}): $result")
+
     //TODO: add logs to filter and flatmap intermediate results ...
 
     val timeProcessing = System.currentTimeMillis() - runningSince
@@ -95,7 +97,7 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
       activity.acsTo.head.split(':').last, dataEntries.head.injectId,
       s"Node finished processing in ${timeProcessing}ms", timeProcessing))
     insertNewResult(result, dataEntries, activity)
-    println(s"$nodeId(${activity.id});Result " + result.toString.take(50) + "...")
+    println(s"$nodeId(${activity.id});Result: " + result.toString.take(50) + "...")
   }
 
   def insertNewResult(result: Option[Serializable], dataEntries: Vector[DataEntry], activityWorker: ActivityWorker): Unit = {
@@ -108,9 +110,14 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
       val dataEntry = DataEntry(actTo, actId, injId, newOrderId, result)
       dataSpace.write(dataEntry, DATA_LEASE_TIME)
     } else {
-      val resultVector = result.getOrElse(actsTo.map(_ => None)).asInstanceOf[IndexedSeq[Serializable]]
+        val resultVector = result match {
+        case Some(values) => values.asInstanceOf[IndexedSeq[Serializable]].map(Some(_))
+        case None => actsTo.map(_ => None)
+      }
+
       for (index <- actsTo.indices) {
-        val dataEntry = DataEntry(actsTo(index), actId, injId, newOrderId, Some(resultVector(index)))
+        val v = resultVector(index)
+        val dataEntry = DataEntry(actsTo(index), actId, injId, newOrderId, v)
         dataSpace.write(dataEntry, DATA_LEASE_TIME)
       }
     }

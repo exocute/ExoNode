@@ -181,8 +181,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
             if (loopNumber >= CONSENSUS_LOOPS_TO_FINISH) {
               if (entry.payload == nodeId) {
                 // Test if really there isn't a table (and therefore an analyser)
-                //FIXME 500 => magic number
-                if (signalSpace.read(templateTable, 500).isEmpty) {
+                if (signalSpace.read(templateTable, CONSENSUS_TEST_TABLE_EXIST_TIME).isEmpty) {
                   signalSpace.write(ExoEntry(TABLE_MARKER, EMPTY_TABLE), TABLE_LEASE_TIME)
                   if (signalSpace.take(entry, ENTRY_READ_TIME).isDefined) {
                     // Everything worked fine and the consensus is successful
