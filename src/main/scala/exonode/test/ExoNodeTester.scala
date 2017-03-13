@@ -20,7 +20,7 @@ class ExoNodeTester extends FlatSpec with BeforeAndAfter {
 
   private val MAX_TIME_FOR_EACH_TEST = 60 * 60 * 1000
 
-  implicit def seqToHashMap[A, B](seq: Seq[(A, B)]): HashMap[A, B] = {
+  private implicit def seqToHashMap[A, B](seq: Seq[(A, B)]): HashMap[A, B] = {
     HashMap(seq: _*)
   }
 
@@ -30,7 +30,7 @@ class ExoNodeTester extends FlatSpec with BeforeAndAfter {
 
   private val tabEntry = ExoEntry(TABLE_MARKER, null)
 
-  private def readTableFromSpace(): Option[ExoEntry] = {
+  private def readTableFromSpace(): Option[ExoEntry[_]] = {
     space.read(tabEntry, 0L)
   }
 
@@ -115,7 +115,7 @@ class ExoNodeTester extends FlatSpec with BeforeAndAfter {
     CliftonNode.DEBUG = false
   }
 
-  def only1Analyser(nodes: Int): Unit = {
+  private def only1Analyser(nodes: Int): Unit = {
     launchNNodes(nodes)
     Thread.sleep(EXPECTED_TIME_TO_CONSENSUS)
 

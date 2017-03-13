@@ -7,12 +7,12 @@ import exonode.clifton.config.BackupConfig
 import exonode.clifton.config.Protocol._
 import exonode.clifton.node.Log.{INFO, ND, WARN}
 import exonode.clifton.node.entries.DataEntry
-import exonode.clifton.node.{Log, Node, SpaceCache}
+import exonode.clifton.node.{CliftonNode, Log, Node, SpaceCache}
 import exonode.clifton.signals.{ActivityFilterType, ActivityFlatMapType, ActivityMapType, LoggingSignal}
 
 /**
   * This thread is continually running till be shutdown
-  * it process the input at the same that allows the node to handle signals
+  * it processes input at the same time that the node continues to handle signals
   */
 class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thread with BusyWorking with Worker {
 
@@ -46,12 +46,12 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
       case e: RuntimeException =>
         val msg = "Message: " + e.toString + ", " + e.getStackTrace.mkString(", ")
         println(nodeId + ";" + msg)
-        Log.receiveLog(LoggingSignal(ERROR_PROCESSING, WARN, nodeId, ND, ND, ND, ND, msg, 0))
+        Log.receiveLog(LoggingSignal(LOGCODE_ERROR_PROCESSING, WARN, nodeId, ND, ND, ND, ND, msg, 0))
 
       case e: Throwable =>
         val msg = "Message: " + e.toString
         println(nodeId + ";" + msg)
-        Log.receiveLog(LoggingSignal(ERROR_PROCESSING, WARN, nodeId, ND, ND, ND, ND, msg, 0))
+        Log.receiveLog(LoggingSignal(LOGCODE_ERROR_PROCESSING, WARN, nodeId, ND, ND, ND, ND, msg, 0))
     }
   }
 
@@ -61,7 +61,7 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
 
   def process(activity: ActivityWorker, dataEntries: Vector[DataEntry]): Unit = {
     val runningSince = System.currentTimeMillis()
-    Log.receiveLog(LoggingSignal(PROCESSING_INPUT, INFO, nodeId, getGraphID(activity.id), ND, activity.id, dataEntries.head.injectId, "Node started processing", 0))
+    Log.receiveLog(LoggingSignal(LOGCODE_PROCESSING_INPUT, INFO, nodeId, getGraphID(activity.id), ND, activity.id, dataEntries.head.injectId, "Node started processing", 0))
 
     val result: Option[Serializable] = {
       if (dataEntries.exists(dataEntry => dataEntry.data.isEmpty)) {
@@ -93,11 +93,11 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
     //TODO: add logs to filter and flatmap intermediate results ...
 
     val timeProcessing = System.currentTimeMillis() - runningSince
-    Log.receiveLog(LoggingSignal(FINISHED_PROCESSING, INFO, nodeId, getGraphID(activity.id), activity.id,
+    Log.receiveLog(LoggingSignal(LOGCODE_FINISHED_PROCESSING, INFO, nodeId, getGraphID(activity.id), activity.id,
       activity.acsTo.head.split(':').last, dataEntries.head.injectId,
       s"Node finished processing in ${timeProcessing}ms", timeProcessing))
     insertNewResult(result, dataEntries, activity)
-    println(s"$nodeId(${activity.id});Result: " + result.toString.take(50) + "...")
+    CliftonNode.debug(nodeId, s"$nodeId(${activity.id});Result: " + result.toString.take(50) + "...")
   }
 
   def insertNewResult(result: Option[Serializable], dataEntries: Vector[DataEntry], activityWorker: ActivityWorker): Unit = {
@@ -110,7 +110,7 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
       val dataEntry = DataEntry(actTo, actId, injId, newOrderId, result)
       dataSpace.write(dataEntry, DATA_LEASE_TIME)
     } else {
-        val resultVector = result match {
+      val resultVector = result match {
         case Some(values) => values.asInstanceOf[IndexedSeq[Serializable]].map(Some(_))
         case None => actsTo.map(_ => None)
       }

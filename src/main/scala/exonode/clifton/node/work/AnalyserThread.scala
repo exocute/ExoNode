@@ -35,9 +35,9 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
   //((actID, injID)), time)
   private type TableBackupType = HashMap[(String, String, String), Long]
 
-  private val templateInfo = ExoEntry(INFO_MARKER, null)
-  private val templateTable = ExoEntry(TABLE_MARKER, null)
-  private val templateGraph = ExoEntry(GRAPH_MARKER, null)
+  private val templateInfo = ExoEntry[NodeInfoType](INFO_MARKER, null)
+  private val templateTable = ExoEntry[TableType](TABLE_MARKER, null)
+  private val templateGraph = ExoEntry[GraphEntryType](GRAPH_MARKER, null)
   private val templateBackup = BackupInfoEntry(null, null, null, null)
 
   override def threadIsBusy = true
@@ -46,8 +46,8 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
     //    graphsChanged = false
     val graphs = signalSpace.readMany(templateGraph, MAX_GRAPHS)
     (for {
-      graph <- graphs
-      (graphId, activities) = graph.payload.asInstanceOf[GraphEntryType]
+      ExoEntry(_, graph) <- graphs
+      (graphId, activities) = graph
       activityId <- activities
       fullId = graphId + ":" + activityId
     } yield fullId -> {
@@ -96,7 +96,6 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
     } else backupTable
   }
 
-
   private def updateBackup(table: TableBackupType, info: BackupInfoEntry): TableBackupType = {
     val infoBackup = (info.toAct, info.injectId, info.orderId)
     if (table.contains(infoBackup))
@@ -120,10 +119,10 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
           dataSpace.take(backupEntryTemplate, ENTRY_READ_TIME) match {
             case None =>
               // information was lost
-              Log.receiveLog(LoggingSignal(INFORMATION_LOST, ERROR, analyserId, ND, ND, ND, injectId, s"Data with inject id $injectId for activity $activityTo wasn't recoverable", 0))
+              Log.receiveLog(LoggingSignal(LOGCODE_INFORMATION_LOST, ERROR, analyserId, ND, ND, ND, injectId, s"Data with inject id $injectId for activity $activityTo wasn't recoverable", 0))
             case Some(backupEntry) =>
               dataSpace.write(backupEntry.createDataEntry(), DATA_LEASE_TIME)
-              Log.receiveLog(LoggingSignal(DATA_RECOVERED, WARN, analyserId, ND, ND, ND, injectId, s"Data with inject id $injectId for activity $activityTo was recovered successfully", 0))
+              Log.receiveLog(LoggingSignal(LOGCODE_DATA_RECOVERED, WARN, analyserId, ND, ND, ND, injectId, s"Data with inject id $injectId for activity $activityTo was recovered successfully", 0))
           }
           recoverNextEntry()
       }
@@ -146,7 +145,7 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
 
       val (updatedTrackerTable, newBackupTable) =
         if (infoEntries.nonEmpty) {
-          val nodeInfos = infoEntries.map(_.payload.asInstanceOf[NodeInfoType]).filterNot(_._1 == analyserId)
+          val nodeInfos = infoEntries.map(_.payload).filterNot(_._1 == analyserId)
           val (notProcessing, processing) = nodeInfos.partition(_._3 == NOT_PROCESSING_MARKER)
           val trackUpdateTable = notProcessing.foldLeft(trackerTable)((tracker, info) => updateTrackerTable(tracker, info, currentTime))
           val backupUpdateTable = processing.foldLeft(backupsTable)((backupTable, info) => updateBackupTable(backupTable, info))
@@ -157,7 +156,7 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
 
       val (updatedDistributionTable, updatedGraphsChangedTime) = {
         val distTable = updateDistributionTable(trackerTable, originalDistributionTable, currentTime)
-        if (currentTime - graphsChangedTime > ANALYSER_CHECK_GRAPHS)
+        if (currentTime - graphsChangedTime > ANALYSER_CHECK_GRAPHS_TIME)
           (reloadGraphs(distTable), currentTime)
         else
           (distTable, graphsChangedTime)

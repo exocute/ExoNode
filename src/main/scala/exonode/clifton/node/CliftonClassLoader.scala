@@ -86,6 +86,8 @@ class CliftonClassLoader() extends ClassLoader(getClass.getClassLoader) {
       findClass(name)
     } catch {
       case _: ClassNotFoundException => getParent.loadClass(name)
+      case _: SecurityException =>
+        getParent.loadClass(name)
     }
   }
 

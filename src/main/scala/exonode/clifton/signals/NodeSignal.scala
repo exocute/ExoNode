@@ -4,7 +4,7 @@ package exonode.clifton.signals
   * Created by #ScalaTeam on 30-12-2016.
   */
 
-trait NodeSignal
+trait NodeSignal extends Serializable
 
 //if a nodes receives a KillSignal immediately aborts and die
 case object KillSignal extends NodeSignal

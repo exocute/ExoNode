@@ -12,8 +12,8 @@ import scala.collection.mutable
   *
   * Default parameters are set to LocalHost but can be changed
   *
-  * SignalSpace => saves the graphRepresentation, Log infos, nodes info
-  * DataSpace => saves the result of all activities
+  * SignalSpace => saves the graph representation, Log infos, nodes info
+  * DataSpace => saves the data and backups of all activities
   * JarSpace => saves FlyClassEntry and FlyJarEntry of all jars
   *
   */
@@ -38,7 +38,7 @@ object SpaceCache {
   private def getSpace(tag: String, host: String): ScalaFly = {
     spaceMap.get(tag) match {
       case Some(space) => space
-      case None => {
+      case None =>
         try {
           if (host.isEmpty) {
             val finder: FlyFinder = new FlyFinder()
@@ -51,7 +51,6 @@ object SpaceCache {
             //Log.error("Failed to locate space")
             throw new Exception("Failed to locate space")
         }
-      }
     }
   }
 
