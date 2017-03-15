@@ -1,4 +1,4 @@
-package exonode.test
+package exonode
 
 import java.io.Serializable
 
@@ -14,7 +14,7 @@ import scala.language.implicitConversions
 /**
   * Created by #ScalaTeam on 17/01/2017.
   */
-class ExoNodeTester extends FlatSpec with BeforeAndAfter {
+class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
 
   private val space = SpaceCache.getSignalSpace
 
