@@ -43,13 +43,8 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
     } catch {
       case e: InterruptedException =>
         println("InterruptedException: " + e.getMessage)
-      case e: RuntimeException =>
-        val msg = "Message: " + e.toString + ", " + e.getStackTrace.mkString(", ")
-        println(nodeId + ";" + msg)
-        Log.receiveLog(LoggingSignal(LOGCODE_ERROR_PROCESSING, WARN, nodeId, ND, ND, ND, ND, msg, 0))
-
       case e: Throwable =>
-        val msg = "Message: " + e.toString
+        val msg = "Message: " + e.toString + ", " + e.getStackTrace.mkString(", ")
         println(nodeId + ";" + msg)
         Log.receiveLog(LoggingSignal(LOGCODE_ERROR_PROCESSING, WARN, nodeId, ND, ND, ND, ND, msg, 0))
     }

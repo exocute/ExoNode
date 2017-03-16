@@ -23,6 +23,6 @@ case class DataEntry(toAct: String, fromAct: String, injectId: String, orderId: 
 
   def createBackup(): BackupEntry = BackupEntry(toAct, fromAct, injectId, orderId, data)
 
-  def createInfoBackup(): BackupInfoEntry = BackupInfoEntry(toAct, fromAct, orderId, injectId)
+  def createInfoBackup(): BackupInfoEntry = BackupInfoEntry(toAct, fromAct, injectId, orderId)
 
 }

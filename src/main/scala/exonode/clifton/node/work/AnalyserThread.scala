@@ -58,20 +58,11 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
     }).toSeq
   }
 
-  //  private var graphsChanged: Boolean = false
-
-  //  private object GraphChangeNotifier extends NotifyHandler {
-  //    override def templateMatched(): Unit = graphsChanged = true
-  //  }
-
   private var cancel = false
 
   override def cancelThread(): Unit = cancel = true
 
   override def run(): Unit = {
-    // Sometimes the notify fails so we will not use them for now
-    //    val writeRenewer = new NotifyWriteRenewer(signalSpace, templateGraph, GraphChangeNotifier, NOTIFY_GRAPHS_ANALYSER_TIME)
-    //    val takeRenewer = new NotifyTakeRenewer(signalSpace, templateGraph, GraphChangeNotifier, NOTIFY_GRAPHS_ANALYSER_TIME)
     try {
       val trackerTable: TrackerTableType = Nil
       val initialTable = reloadGraphs(EMPTY_TABLE)
@@ -83,8 +74,6 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
       readInfosFromSpace(currentTime, currentTime, currentTime, trackerTable, initialTable, backupsTable)
     } catch {
       case _: Throwable =>
-      //        writeRenewer.cancel()
-      //        takeRenewer.cancel()
     }
   }
 
