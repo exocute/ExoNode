@@ -11,6 +11,8 @@ import exonode.clifton.node.{CliftonNode, Log, Node, SpaceCache}
 import exonode.clifton.signals.{ActivityFilterType, ActivityFlatMapType, ActivityMapType, LoggingSignal}
 
 /**
+  * Created by #GrowinScala
+  *
   * This thread is continually running till be shutdown
   * it processes input at the same time that the node continues to handle signals
   */

@@ -9,6 +9,9 @@ import exonode.distributer.{FlyClassEntry, FlyJarEntry}
 
 import scala.collection.mutable
 
+/**
+  * Created by #GrowinScala
+  */
 class CliftonClassLoader() extends ClassLoader(getClass.getClassLoader) {
 
   private val CLASS_EXTENSION = ".class"

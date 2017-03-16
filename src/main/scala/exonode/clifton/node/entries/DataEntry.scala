@@ -3,7 +3,7 @@ package exonode.clifton.node.entries
 import java.io.Serializable
 
 /**
-  * Created by #ScalaTeam on 05-01-2017.
+  * Created by #GrowinScala
   *
   * DataEntry transports the results of an activity
   * injectID is unique for every inject made. This allows to make joins and forks correctly

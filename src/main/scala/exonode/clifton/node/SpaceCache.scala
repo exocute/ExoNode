@@ -8,7 +8,7 @@ import exonode.distributer.{FlyClassEntry, FlyJarEntry}
 import scala.collection.mutable
 
 /**
-  * Created by #ScalaTeam on 20/12/2016.
+  * Created by #GrowinScala
   *
   * Default parameters are set to LocalHost but can be changed
   *

@@ -5,7 +5,7 @@ import exocute.Activity
 import scala.collection.mutable
 
 /**
-  * Created by #ScalaTeam on 20-12-2016.
+  * Created by #GrowinScala
   *
   * Takes a activity name and finds it in the space
   */

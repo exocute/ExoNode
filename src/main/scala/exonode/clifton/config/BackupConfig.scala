@@ -1,7 +1,7 @@
 package exonode.clifton.config
 
 /**
-  * Created by #ScalaTeam on 09-02-2017.
+  * Created by #GrowinScala
   */
 class BackupConfig {
 

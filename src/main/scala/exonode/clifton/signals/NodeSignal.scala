@@ -1,7 +1,7 @@
 package exonode.clifton.signals
 
 /**
-  * Created by #ScalaTeam on 30-12-2016.
+  * Created by #GrowinScala
   */
 
 trait NodeSignal extends Serializable

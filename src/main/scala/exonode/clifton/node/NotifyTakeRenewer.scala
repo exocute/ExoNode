@@ -20,8 +20,7 @@ import com.zink.fly.NotifyHandler
 import com.zink.scala.fly.NotifyOps
 
 /**
-  * Created by #ScalaTeam on 20/01/2017.
-  *
+  * Created by #GrowinScala
   */
 class NotifyTakeRenewer(val space: NotifyOps, val template: AnyRef, val handler: NotifyHandler, val leaseTime: Long) {
 

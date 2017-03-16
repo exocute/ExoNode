@@ -1,7 +1,7 @@
 package exonode.clifton.node
 
 /**
-  * Created by #ScalaTeam on 14-02-2017.
+  * Created by #GrowinScala
   */
 trait Node {
 

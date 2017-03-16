@@ -3,7 +3,7 @@ package exonode.clifton.node
 import scala.util.Try
 
 /**
-  * Created by #ScalaTeam on 05/01/2017.
+  * Created by #GrowinScala
   *
   * Interface that allows users to start nodes
   * All the host spaces can be defined by the user, if they are not defined default parameters are set to localhost

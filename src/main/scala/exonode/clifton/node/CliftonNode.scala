@@ -13,7 +13,7 @@ import exonode.clifton.signals._
 import scala.util.Random
 
 /**
-  * Created by #ScalaTeam on 05-01-2017.
+  * Created by #GrowinScala
   *
   * Generic node. Nodes are responsible for processing activities or analysing INFOs from the space.
   * A CliftonNode has two main modes: Analyser or Worker

@@ -5,7 +5,7 @@ import java.io.File
 import scala.util.{Success, Try}
 
 /**
-  * Created by #ScalaTeam on 09-02-2017.
+  * Created by #GrowinScala
   */
 object ConfigLoader {
 

@@ -5,7 +5,7 @@ import exonode.clifton.config.ConfigLoader._
 import scala.collection.immutable.HashMap
 
 /**
-  * Created by #ScalaTeam on 02-01-2017
+  * Created by #GrowinScala
   */
 object Protocol {
 

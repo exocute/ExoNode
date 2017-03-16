@@ -15,7 +15,7 @@ import scala.collection.immutable.HashMap
 import scala.language.implicitConversions
 
 /**
-  * Created by #ScalaTeam on 05/01/2017.
+  * Created by #GrowinScala
   *
   * AnalyserNode is responsible for updating the space with a table of how many nodes
   * are processing some activity. Analyser Node it's one of the modes of what a clifton node

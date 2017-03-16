@@ -12,7 +12,7 @@ import scala.collection.immutable.HashMap
 import scala.language.implicitConversions
 
 /**
-  * Created by #ScalaTeam on 17/01/2017.
+  * Created by #GrowinScala
   */
 class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
 

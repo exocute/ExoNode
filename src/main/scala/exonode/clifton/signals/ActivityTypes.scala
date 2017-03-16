@@ -1,8 +1,11 @@
 /**
-  * Created by #ScalaTeam on 02-03-2017.
+  * Created by #GrowinScala
   */
 package exonode.clifton.signals
 
+/**
+  * Created by #GrowinScala
+  */
 sealed trait ActivityType
 
 case object ActivityMapType extends ActivityType {

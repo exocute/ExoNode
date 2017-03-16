@@ -1,7 +1,7 @@
 package exonode.clifton.signals
 
 /**
-  * Created by #ScalaTeam on 20/12/2016.
+  * Created by #GrowinScala
   *
   * Transports the information of a log message
   */

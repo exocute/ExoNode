@@ -3,7 +3,7 @@ package exocute
 import java.io.Serializable
 
 /**
-  * Created by #ScalaTeam on 20/12/2016.
+  * Created by #GrowinScala
   */
 trait Activity {
 
