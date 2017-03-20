@@ -1,6 +1,3 @@
-/**
-  * Created by #GrowinScala
-  */
 package exonode.clifton.signals
 
 /**
@@ -9,14 +6,13 @@ package exonode.clifton.signals
 sealed trait ActivityType
 
 case object ActivityMapType extends ActivityType {
-  override def toString = "map"
-}
-
-case object ActivityFlatMapType extends ActivityType {
-  override def toString = "flatMap"
+  override def toString = "Activity"
 }
 
 case object ActivityFilterType extends ActivityType {
-  override def toString = "filter"
+  override def toString = "ActivityFilter"
 }
 
+case object ActivityFlatMapType extends ActivityType {
+  override def toString = "ActivityFlatMap"
+}
