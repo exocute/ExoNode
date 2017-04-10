@@ -97,7 +97,8 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
     CliftonNode.debug(nodeId, s"$nodeId(${activity.id});Result: " + result.toString.take(50) + "...")
   }
 
-  def insertNewResult(result: Option[Serializable], dataEntries: Vector[DataEntry], activityWorker: ActivityWorker): Unit = {
+  def insertNewResult(result: Option[Serializable], dataEntries: Vector[DataEntry],
+                      activityWorker: ActivityWorker): Unit = {
     val actId = activityWorker.id
     val actsTo = activityWorker.acsTo
     val injId = dataEntries.head.injectId
