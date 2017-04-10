@@ -58,7 +58,8 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
 
   def process(activity: ActivityWorker, dataEntries: Vector[DataEntry]): Unit = {
     val runningSince = System.currentTimeMillis()
-    Log.receiveLog(LoggingSignal(LOGCODE_PROCESSING_INPUT, INFO, nodeId, getGraphID(activity.id), ND, activity.id, dataEntries.head.injectId, "Node started processing", 0))
+    Log.receiveLog(LoggingSignal(LOGCODE_PROCESSING_INPUT, INFO, nodeId, getGraphID(activity.id),
+      ND, activity.id, dataEntries.head.injectId, "Node started processing", 0))
 
     val result: Option[Serializable] = {
       if (dataEntries.exists(dataEntry => dataEntry.data.isEmpty)) {
@@ -87,7 +88,7 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
 
     //    println(s"Result of $nodeId(${activity.id}): $result")
 
-    //TODO: add logs to filter and flatmap intermediate results ...
+    //TODO: add logs to filter and flatMap intermediate results...
 
     val timeProcessing = System.currentTimeMillis() - runningSince
     Log.receiveLog(LoggingSignal(LOGCODE_FINISHED_PROCESSING, INFO, nodeId, getGraphID(activity.id), activity.id,
@@ -97,7 +98,8 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
     CliftonNode.debug(nodeId, s"$nodeId(${activity.id});Result: " + result.toString.take(50) + "...")
   }
 
-  def insertNewResult(result: Option[Serializable], dataEntries: Vector[DataEntry], activityWorker: ActivityWorker): Unit = {
+  def insertNewResult(result: Option[Serializable], dataEntries: Vector[DataEntry],
+                      activityWorker: ActivityWorker): Unit = {
     val actId = activityWorker.id
     val actsTo = activityWorker.acsTo
     val injId = dataEntries.head.injectId

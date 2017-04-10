@@ -10,14 +10,16 @@ corresponding inputs are available.
 For more information about the Exonode: http://bit.ly/2mBHBNd
 
 ## Releases
+10/04/2017 <br />
+--> **ExoNode v1.1** <br />
 
 02/03/2017 <br />
---> ***ExoNode v1.0*** <br />
+--> **ExoNode v1.0** <br />
 
 How to use? <br />
 To launch the app run ExoNode.jar
   ```
-java -jar ExoNode.jarb [options]
+java -jar ExoNode.jar [options]
 ```
 Options available: <br />
 
@@ -42,7 +44,7 @@ Options available: <br />
  
 | Software       | Version       | Link                                   |
 | ---------------|:-------------:| --------------------------------------:|
-| Scala          | 12.0.2        |                                        |
+| Scala          | 2.12.1        |                                        |
 | Java           | 1.8           | http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html                                       |
-| FlyObjectSpace | 2.0.2      |  https://github.com/fly-object-space   |
+| FlyObjectSpace | 2.2.0      |  https://github.com/fly-object-space/fly-scala   |
 

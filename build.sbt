@@ -2,9 +2,11 @@ name := "ExoNode"
 
 organization := "growin"
 
-version := "1.1-SNAPSHOT"
+version := "1.1"
 
 scalaVersion := "2.12.1"
+
+scalacOptions ++= Seq("-feature", "-deprecation")
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.1"
 

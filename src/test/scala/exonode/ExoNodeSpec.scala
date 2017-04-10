@@ -28,9 +28,9 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
     space.write(ExoEntry(marker, input), MAX_TIME_FOR_EACH_TEST)
   }
 
-  private val tabEntry = ExoEntry(TABLE_MARKER, null)
+  private val tabEntry = ExoEntry[TableType](TABLE_MARKER, null)
 
-  private def readTableFromSpace(): Option[ExoEntry[_]] = {
+  private def readTableFromSpace(): Option[ExoEntry[TableType]] = {
     space.read(tabEntry, 0L)
   }
 
@@ -87,7 +87,7 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
       case None =>
         fail()
       case Some(entry) =>
-        val newTable = entry.payload.asInstanceOf[TableType]
+        val newTable = entry.payload
         assert(newTable.foldLeft(0)(_ + _._2) == N - 1)
     }
   }
