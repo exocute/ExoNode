@@ -70,7 +70,7 @@ object StartExoNode {
             CliftonNode.DEBUG = true
           case "--version" =>
             //FIXME get version dynamically ?
-            println("Exocute version: 1.1")
+            println("ExoNode version: 1.2-SNAPSHOT")
             System.exit(0)
           case _ =>
             println("Unknown command: " + cmd)
@@ -91,13 +91,13 @@ object StartExoNode {
     while (numberOfNodes.isEmpty) {
       print("\nSelect the number of nodes you want to start:\n>")
       val nodes = scala.io.StdIn.readLine()
-      if (isValidInt(nodes))
+      if (isValidNatNumber(nodes))
         numberOfNodes = Some(nodes.toInt)
       else
         println("Not a valid number of nodes.")
     }
 
-    for (x <- 1 to numberOfNodes.get) {
+    for (_ <- 1 to numberOfNodes.get) {
       new CliftonNode().start()
       Thread.sleep((math.random() * 25).toInt)
     }
@@ -105,11 +105,11 @@ object StartExoNode {
     println("Started " + numberOfNodes.get + " nodes.")
   }
 
-  def isValidInt(x: String): Boolean = {
-    x.forall(Character.isDigit) && {
-      val long: Long = x.toLong
-      long <= Int.MaxValue
-    }
+  private def isValidNatNumber(str: String): Boolean = {
+    str.forall(Character.isDigit) && Try {
+      val long: Long = str.toLong
+      long >= 0 && long <= Int.MaxValue
+    }.fold(_ => false, identity)
   }
 
 }

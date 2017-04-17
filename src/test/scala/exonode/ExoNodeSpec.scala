@@ -120,7 +120,7 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
     Thread.sleep(EXPECTED_TIME_TO_CONSENSUS)
 
     //kill analyser
-    Thread.sleep(40 * 1000)
+    Thread.sleep(60 * 1000)
     assert {
       space.readMany(tabEntry, 2).size == 1 && {
         Thread.sleep(10 * 1000)

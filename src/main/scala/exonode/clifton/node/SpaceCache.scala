@@ -2,7 +2,7 @@ package exonode.clifton.node
 
 import com.zink.fly.kit.{FlyFactory, FlyFinder}
 import com.zink.scala.fly.ScalaFly
-import exonode.clifton.node.entries.{BackupEntry, BackupInfoEntry, DataEntry, ExoEntry}
+import exonode.clifton.node.entries._
 import exonode.distributer.{FlyClassEntry, FlyJarEntry}
 
 import scala.collection.mutable
@@ -70,6 +70,8 @@ object SpaceCache {
     clean(getDataSpace, DataEntry(null, null, null, null, null))
     clean(getDataSpace, BackupEntry(null, null, null, null, null))
     clean(getDataSpace, BackupInfoEntry(null, null, null, null))
+    clean(getDataSpace, FlatMapEntry(null, null, null))
     clean(getSignalSpace, ExoEntry(null, null))
+    clean(getSignalSpace, GraphEntry(null, null))
   }
 }
