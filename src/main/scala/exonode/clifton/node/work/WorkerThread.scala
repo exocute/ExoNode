@@ -6,7 +6,7 @@ import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 import exonode.clifton.config.BackupConfig
 import exonode.clifton.config.Protocol._
 import exonode.clifton.node.Log.{INFO, ND, WARN}
-import exonode.clifton.node.entries.DataEntry
+import exonode.clifton.node.entries.{DataEntry, FlatMapEntry}
 import exonode.clifton.node.{CliftonNode, Log, Node, SpaceCache}
 import exonode.clifton.signals.{ActivityFilterType, ActivityFlatMapType, ActivityMapType, LoggingSignal}
 
@@ -61,9 +61,9 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
     Log.receiveLog(LoggingSignal(LOGCODE_PROCESSING_INPUT, INFO, nodeId, getGraphID(activity.id),
       ND, activity.id, dataEntries.head.injectId, "Node started processing", 0))
 
-    val result: Option[Serializable] = {
+    val result: Either[Option[Seq[Serializable]], Option[Serializable]] = {
       if (dataEntries.exists(dataEntry => dataEntry.data.isEmpty)) {
-        None
+        if (activity.actType == ActivityFlatMapType) Left(None) else Right(None)
       } else {
         val input: Serializable = {
           val entriesData = dataEntries.map(_.data.get)
@@ -74,54 +74,81 @@ class WorkerThread(node: Node)(implicit backupConfig: BackupConfig) extends Thre
         }
         val processResult = activity.process(input)
         activity.actType match {
-          case ActivityMapType => Some(processResult)
+          case ActivityMapType => Right(Some(processResult))
           case ActivityFilterType => processResult match {
-            case filterResult: java.lang.Boolean => if (filterResult) Some(input) else None
-            case _ => None
+            case filterResult: java.lang.Boolean => Right(if (filterResult) Some(input) else None)
+            case _ => Right(None)
           }
-          case ActivityFlatMapType =>
-            //FIXME its the same as map for now
-            Some(processResult)
+          case ActivityFlatMapType => processResult match {
+            case seq =>
+              Left(Some(seq.asInstanceOf[Seq[Serializable]]))
+          }
         }
       }
     }
-
-    //    println(s"Result of $nodeId(${activity.id}): $result")
-
-    //TODO: add logs to filter and flatMap intermediate results...
 
     val timeProcessing = System.currentTimeMillis() - runningSince
     Log.receiveLog(LoggingSignal(LOGCODE_FINISHED_PROCESSING, INFO, nodeId, getGraphID(activity.id), activity.id,
       activity.acsTo.head.split(':').last, dataEntries.head.injectId,
       s"Node finished processing in ${timeProcessing}ms", timeProcessing))
-    insertNewResult(result, dataEntries, activity)
-    CliftonNode.debug(nodeId, s"$nodeId(${activity.id});Result: " + result.toString.take(50) + "...")
+    if (activity.actType == ActivityFlatMapType)
+      insertResultFlatten(result.left.get, dataEntries, activity)
+    else
+      insertResultStandard(result.right.get, dataEntries, activity)
+    CliftonNode.debug(nodeId, s"$nodeId(${activity.id});Result: " + result.fold(identity, identity).toString.take(50) + "...")
   }
 
-  def insertNewResult(result: Option[Serializable], dataEntries: Vector[DataEntry],
-                      activityWorker: ActivityWorker): Unit = {
+  private def insertResultFlatten(result: Option[Seq[Serializable]],
+                                  dataEntries: Vector[DataEntry],
+                                  activityWorker: ActivityWorker): Unit = {
+
     val actId = activityWorker.id
     val actsTo = activityWorker.acsTo
     val injId = dataEntries.head.injectId
-    val newOrderId = dataEntries.head.orderId //FIXME add flatMap new id if necessary
-    if (actsTo.size == 1) {
-      val actTo = actsTo.head
-      val dataEntry = DataEntry(actTo, actId, injId, newOrderId, result)
-      dataSpace.write(dataEntry, DATA_LEASE_TIME)
-    } else {
-      val resultVector = result match {
-        case Some(values) => values.asInstanceOf[IndexedSeq[Serializable]].map(Some(_))
-        case None => actsTo.map(_ => None)
-      }
 
-      for (index <- actsTo.indices) {
-        val v = resultVector(index)
-        val dataEntry = DataEntry(actsTo(index), actId, injId, newOrderId, v)
-        dataSpace.write(dataEntry, DATA_LEASE_TIME)
-      }
+    def sendResult(actTo: String, orderId: String, result: Option[Serializable]): Unit = {
+      dataSpace.write(DataEntry(actTo, actId, injId, orderId, result), DATA_LEASE_TIME)
     }
 
-    //clear Backups
+    result match {
+      case None =>
+        // Send None to each activity of the fork
+        val orderId = s"${dataEntries.head.orderId}:0"
+        for (actTo <- actsTo)
+          sendResult(actTo, orderId, None)
+        // The collector only needs to know that there is one element (that is filtered)
+        dataSpace.write(FlatMapEntry.fromInjectId(injId, orderId, 1), DATA_LEASE_TIME)
+      case Some(dataSeq) =>
+        // Send the values seq to each activity of the fork
+        val orderId = dataEntries.head.orderId
+        for {
+          (value, index) <- dataSeq.zipWithIndex
+          actTo <- actsTo
+        } sendResult(actTo, s"$orderId:$index", Some(value))
+        // The collector needs to know how many elements there are
+        dataSpace.write(FlatMapEntry.fromInjectId(injId, orderId, dataSeq.size), DATA_LEASE_TIME)
+    }
+
+    clearBackups(dataEntries)
+  }
+
+  private def insertResultStandard(result: Option[Serializable],
+                                   dataEntries: Vector[DataEntry],
+                                   activityWorker: ActivityWorker): Unit = {
+    val actId = activityWorker.id
+    val actsTo = activityWorker.acsTo
+    val injId = dataEntries.head.injectId
+    val orderId = dataEntries.head.orderId // same order id, because we are not in a flatMap
+
+    for (actTo <- actsTo) {
+      val dataEntry = DataEntry(actTo, actId, injId, orderId, result)
+      dataSpace.write(dataEntry, DATA_LEASE_TIME)
+    }
+
+    clearBackups(dataEntries)
+  }
+
+  private def clearBackups(dataEntries: Vector[DataEntry]) {
     for (dataEntry <- dataEntries) {
       dataSpace.takeMany(dataEntry.createBackup(), backupConfig.MAX_BACKUPS_IN_SPACE)
       dataSpace.takeMany(dataEntry.createInfoBackup(), backupConfig.MAX_BACKUPS_IN_SPACE)

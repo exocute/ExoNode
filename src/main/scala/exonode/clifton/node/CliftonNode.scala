@@ -7,7 +7,7 @@ import exonode.clifton.config.BackupConfig
 import exonode.clifton.config.Protocol._
 import exonode.clifton.node.Log.{ERROR, INFO, ND, WARN}
 import exonode.clifton.node.entries.{DataEntry, ExoEntry}
-import exonode.clifton.node.work.{ConsecutiveWork, _}
+import exonode.clifton.node.work._
 import exonode.clifton.signals._
 
 import scala.util.Random
@@ -178,15 +178,15 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
                   signalSpace.write(ExoEntry(TABLE_MARKER, EMPTY_TABLE), TABLE_LEASE_TIME)
                   if (signalSpace.take(entry, ENTRY_READ_TIME).isDefined) {
                     // Everything worked fine and the consensus is successful
-                    debug("found that consensus is successful")
+                    debug("found that consensus was successful")
                     transformIntoAnalyser()
                   } else {
                     // The consensus have failed (want-to-be-analyser entry have timeout from the space?)
-                    debug("found that consensus have failed")
+                    debug("found that consensus has failed")
                     signalSpace.take(TABLE_MARKER, ENTRY_READ_TIME)
                   }
                 } else {
-                  debug("found a table when the node was going to be an analyser")
+                  debug("found a table when it was trying to be an analyser")
                 }
               }
             }
@@ -328,7 +328,6 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     /**
       * try to read all the results of an injectID that should do a Join
       *
-      * @param actsFrom
       * @return true if both activities of the join are already present in the space
       */
     def tryToReadAll(actsFrom: Vector[String]): Boolean = {
@@ -349,7 +348,6 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     /**
       * Try to read all the results of an injectID that should do a Join
       *
-      * @param actsFrom
       * @return if both activities of the join was successfully taken from the space it returns
       *         a vector with them
       */
@@ -473,7 +471,6 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     }
 
     /**
-      * @param table
       * @return returns a random activity id from the table
       */
     def getRandomActivity(table: TableType): Option[String] = {

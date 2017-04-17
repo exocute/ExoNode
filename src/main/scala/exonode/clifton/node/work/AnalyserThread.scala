@@ -7,7 +7,7 @@ import exonode.clifton.config.BackupConfig
 import exonode.clifton.config.Protocol._
 import exonode.clifton.node.Log.{ERROR, ND, WARN}
 import exonode.clifton.node._
-import exonode.clifton.node.entries.{BackupInfoEntry, ExoEntry}
+import exonode.clifton.node.entries.{BackupInfoEntry, ExoEntry, GraphEntry}
 import exonode.clifton.signals.LoggingSignal
 
 import scala.annotation.tailrec
@@ -37,7 +37,7 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
 
   private val templateInfo = ExoEntry[NodeInfoType](INFO_MARKER, null)
   private val templateTable = ExoEntry[TableType](TABLE_MARKER, null)
-  private val templateGraph = ExoEntry[GraphEntryType](GRAPH_MARKER, null)
+  private val templateGraph = GraphEntry(null, null)
   private val templateBackup = BackupInfoEntry(null, null, null, null)
 
   override def threadIsBusy = true
@@ -46,8 +46,7 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
     //    graphsChanged = false
     val graphs = signalSpace.readMany(templateGraph, MAX_GRAPHS)
     (for {
-      ExoEntry(_, graph) <- graphs
-      (graphId, activities) = graph
+      GraphEntry(graphId, activities) <- graphs
       activityId <- activities
       fullId = graphId + ":" + activityId
     } yield fullId -> {

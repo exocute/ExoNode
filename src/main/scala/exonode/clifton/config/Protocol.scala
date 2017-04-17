@@ -18,7 +18,6 @@ object Protocol {
   val INFO_MARKER = "INFO"
   val TABLE_MARKER = "TABLE"
   val NODE_SIGNAL_MARKER = "NODESIGNAL"
-  val GRAPH_MARKER = "GRAPH"
   val NOT_PROCESSING_MARKER = "NOT_PROCESSING"
   val WANT_TO_BE_ANALYSER_MARKER = "WANT_TO_BE_ANALYSER"
 
@@ -49,8 +48,6 @@ object Protocol {
   type TableEntryType = (String, Int)
   //(nodeId, activityId, injectID, orderId)
   type NodeInfoType = (String, String, String, String)
-  //(graphId, list of activity ids)
-  type GraphEntryType = (String, Vector[String])
 
   //other constants
 
