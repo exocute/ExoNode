@@ -5,7 +5,8 @@ package exonode.clifton.config
   */
 class BackupConfig {
 
-  protected val MIN: Long = 60 * 1000
+  protected final val MIN: Long = 60 * 1000
+  protected final val HOUR: Long = 60 * MIN
 
   def BACKUP_DATA_LEASE_TIME: Long = 60 * MIN
 

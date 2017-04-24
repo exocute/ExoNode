@@ -2,7 +2,8 @@ package exonode
 
 import java.io.Serializable
 
-import exonode.clifton.config.Protocol._
+import exonode.clifton.config.ProtocolConfig.AnalyserTable
+import exonode.clifton.config.{ConfigLoader, ProtocolConfig}
 import exonode.clifton.node.entries.ExoEntry
 import exonode.clifton.node.{CliftonNode, SpaceCache}
 import exonode.clifton.signals.KillSignal
@@ -28,9 +29,10 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
     space.write(ExoEntry(marker, input), MAX_TIME_FOR_EACH_TEST)
   }
 
-  private val tabEntry = ExoEntry[TableType](TABLE_MARKER, null)
+  private val tabEntry = ExoEntry[AnalyserTable](ProtocolConfig.TABLE_MARKER, null)
+  private val config = ProtocolConfig.DEFAULT
 
-  private def readTableFromSpace(): Option[ExoEntry[TableType]] = {
+  private def readTableFromSpace(): Option[ExoEntry[AnalyserTable]] = {
     space.read(tabEntry, 0L)
   }
 
@@ -57,7 +59,8 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
     nodeIds.foreach(nodeId => writeToSpace(nodeId, KillSignal))
   }
 
-  private val EXPECTED_TIME_TO_CONSENSUS = 10 * 1000 + CONSENSUS_MAX_SLEEP_TIME * (1 + CONSENSUS_LOOPS_TO_FINISH)
+  private val EXPECTED_TIME_TO_CONSENSUS = 10 * 1000 +
+    config.CONSENSUS_MAX_SLEEP_TIME * (1 + config.CONSENSUS_LOOPS_TO_FINISH)
 
   before {
     SpaceCache.cleanAllSpaces()
@@ -82,12 +85,11 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
     val ids = launchNNodes(N)
     Thread.sleep(EXPECTED_TIME_TO_CONSENSUS)
     // time to read infos into table
-    Thread.sleep(5 * 1000 + 3 * ANALYSER_SLEEP_TIME)
+    Thread.sleep(5 * 1000 + 3 * config.ANALYSER_SLEEP_TIME)
     readTableFromSpace() match {
       case None =>
         fail()
-      case Some(entry) =>
-        val newTable = entry.payload
+      case Some(ExoEntry(_, AnalyserTable(newTable, _))) =>
         assert(newTable.foldLeft(0)(_ + _._2) == N - 1)
     }
   }
@@ -107,7 +109,7 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
 
   {
     CliftonNode.DEBUG = true
-    for (n <- 20 to 1 by -1) {
+    for (n <- 21 to 1 by -2) {
       s"Only 1 analyser with $n nodes" should "check if there is only one analyser in the space" in {
         only1Analyser(n)
       }
@@ -119,7 +121,6 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
     launchNNodes(nodes)
     Thread.sleep(EXPECTED_TIME_TO_CONSENSUS)
 
-    //kill analyser
     Thread.sleep(60 * 1000)
     assert {
       space.readMany(tabEntry, 2).size == 1 && {

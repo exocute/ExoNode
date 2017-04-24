@@ -1,8 +1,8 @@
 package exonode.clifton.node
 
-import exonode.clifton.config.Protocol._
+import exonode.clifton.config.ProtocolConfig
 import exonode.clifton.node.entries.ExoEntry
-import exonode.clifton.signals.{LoggingSignal}
+import exonode.clifton.signals.LoggingSignal
 
 /**
   * Created by #GrowinScala
@@ -19,11 +19,11 @@ object Log {
 
   private val space = SpaceCache.getSignalSpace
 
-  def receiveLog(log: LoggingSignal): Long = {
+  def writeLog(log: LoggingSignal): Long = {
     if(log.level.equals(ERROR)) {
       val newMessage = formatMessage(log.message)
-      space.write(ExoEntry(LOG_MARKER, log.setMessage(newMessage)), LOG_LEASE_TIME)
-    } else space.write(ExoEntry(LOG_MARKER, log), LOG_LEASE_TIME)
+      space.write(ExoEntry(ProtocolConfig.LOG_MARKER, log.setMessage(newMessage)), ProtocolConfig.LOG_LEASE_TIME)
+    } else space.write(ExoEntry(ProtocolConfig.LOG_MARKER, log), ProtocolConfig.LOG_LEASE_TIME)
   }
 
   private def formatMessage(msg: String): String = {

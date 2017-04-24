@@ -3,10 +3,10 @@ package exonode.clifton.node
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 import java.util.{Date, UUID}
 
-import exonode.clifton.config.BackupConfig
-import exonode.clifton.config.Protocol._
+import exonode.clifton.config.ProtocolConfig._
+import exonode.clifton.config.{BackupConfig, ConfigLoader, ProtocolConfig}
 import exonode.clifton.node.Log.{ERROR, INFO, ND, WARN}
-import exonode.clifton.node.entries.{DataEntry, ExoEntry}
+import exonode.clifton.node.entries.{DataEntry, ExoEntry, GraphEntry}
 import exonode.clifton.node.work._
 import exonode.clifton.signals._
 
@@ -29,6 +29,9 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
 
   private class KillSignalException extends Exception
 
+  val waitQueue: BlockingQueue[Unit] = new LinkedBlockingQueue[Unit]()
+  implicit private var config: ProtocolConfig = ProtocolConfig.DEFAULT
+
   @inline private def debug(msg: => String) = {
     CliftonNode.debug(nodeId, msg)
   }
@@ -42,17 +45,20 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
   private def filterActivities(table: TableType): TableType =
     table.filterNot { case (id, _) => id == UNDEFINED_ACT_ID }
 
-  val waitQueue: BlockingQueue[Unit] = new LinkedBlockingQueue[Unit]()
 
   def finishedProcessing(): Unit = waitQueue.add(())
 
-  override def run(): Unit = {
+  def updateConfig(newConfig: ProtocolConfig): Unit = {
+    if (config.ID != newConfig.ID)
+      config = newConfig
+  }
 
+  override def run(): Unit = {
     //templates to search in spaces
     val templateAct = ExoEntry[ActivitySignal]("", null)
-    val templateTable = ExoEntry[TableType](TABLE_MARKER, null)
+    val templateTable = ExoEntry[AnalyserTable](TABLE_MARKER, null)
     var templateData: DataEntry = DataEntry(null, null, null, null, null)
-    var templateUpdateAct = ExoEntry[NodeInfoType](INFO_MARKER, (nodeId, UNDEFINED_ACT_ID, NOT_PROCESSING_MARKER, ""))
+    var templateUpdateAct = ExoEntry[NodeInfoType](INFO_MARKER, NodeInfoType(nodeId, UNDEFINED_ACT_ID, None))
     val templateMySignals = ExoEntry[NodeSignal](nodeId, null)
     val templateNodeSignals = ExoEntry[NodeSignal](NODE_SIGNAL_MARKER, null)
     val templateWantToBeAnalyser = ExoEntry[String](WANT_TO_BE_ANALYSER_MARKER, null)
@@ -62,7 +68,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     var processing: Option[Thread with BusyWorking] = None
 
     //times initializer
-    var sleepTime = NODE_MIN_SLEEP_TIME
+    var sleepTime = config.NODE_MIN_SLEEP_TIME
     var checkTime = System.currentTimeMillis()
     var sendInfoTime = 0L
     var killWhenIdle = false
@@ -80,7 +86,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
 
     val bootMessage = s"Node started"
     println(s"$nodeFullId;$bootMessage")
-    Log.receiveLog(LoggingSignal(LOGCODE_STARTED_NODE, INFO, nodeId, ND, ND, UNDEFINED_ACT_ID, ND, bootMessage, 0))
+    Log.writeLog(LoggingSignal(LOGCODE_STARTED_NODE, INFO, nodeId, ND, ND, UNDEFINED_ACT_ID, ND, bootMessage, 0))
     try {
       while (true) {
         handleSignals()
@@ -127,8 +133,8 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
       */
     def updateNodeInfo(force: Boolean = false): Unit = {
       val currentTime = System.currentTimeMillis()
-      if (force || currentTime - sendInfoTime > NODE_CHECK_TABLE_TIME) {
-        signalSpace.write(templateUpdateAct, NODE_INFO_LEASE_TIME)
+      if (force || currentTime - sendInfoTime > config.NODE_CHECK_TABLE_TIME) {
+        signalSpace.write(templateUpdateAct, config.NODE_INFO_LEASE_TIME)
         sendInfoTime = currentTime
       }
     }
@@ -136,18 +142,19 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     def sleepForAWhile(): Unit = {
       // if nothing was found, it will sleep for a while
       Thread.sleep(sleepTime)
-      sleepTime = math.min(sleepTime + NODE_INCREMENT_SLEEP_TIME, NODE_MAX_SLEEP_TIME)
+      sleepTime = math.min(sleepTime * 2, config.NODE_MAX_SLEEP_TIME)
     }
 
     def doNoWork(): Unit = {
-      signalSpace.read(templateTable, ENTRY_READ_TIME) match {
-        case Some(ExoEntry(_, table)) =>
+      signalSpace.read(templateTable, 0) match {
+        case Some(ExoEntry(_, AnalyserTable(table, analyserConfig))) =>
+          updateConfig(analyserConfig)
           val filteredTable = filterActivities(table)
           if (filteredTable.isEmpty) {
             updateNodeInfo()
             sleepForAWhile()
           } else {
-            sleepTime = NODE_MIN_SLEEP_TIME
+            sleepTime = config.NODE_MIN_SLEEP_TIME
             getRandomActivity(filteredTable).foreach(act => setActivity(act))
           }
         case None =>
@@ -157,33 +164,33 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     }
 
     def consensusAnalyser(): Unit = {
-      Thread.sleep(consensusRandomSleepTime())
+      Thread.sleep(config.consensusRandomSleepTime())
       auxConsensusAnalyser()
-      Thread.sleep(CONSENSUS_MAX_SLEEP_TIME)
+      Thread.sleep(config.CONSENSUS_MAX_SLEEP_TIME)
 
       def auxConsensusAnalyser(loopNumber: Int = 0): Unit = {
-        signalSpace.readMany(templateWantToBeAnalyser, CONSENSUS_ENTRIES_TO_READ).toList match {
+        signalSpace.readMany(templateWantToBeAnalyser, config.CONSENSUS_ENTRIES_TO_READ).toList match {
           case Nil =>
-            if (signalSpace.read(templateTable, ENTRY_READ_TIME).isEmpty) {
-              signalSpace.write(templateWantToBeAnalyser.setPayload(nodeId), CONSENSUS_WANT_TBA_LEASE_TIME)
+            if (signalSpace.read(templateTable, 0).isEmpty) {
+              signalSpace.write(templateWantToBeAnalyser.setPayload(nodeId), config.CONSENSUS_WANT_TBA_LEASE_TIME)
               debug("Wants to be analyser")
-              Thread.sleep(consensusRandomSleepTime())
+              Thread.sleep(config.consensusRandomSleepTime())
               auxConsensusAnalyser()
             }
           case List(entry) =>
-            if (loopNumber >= CONSENSUS_LOOPS_TO_FINISH) {
+            if (loopNumber >= config.CONSENSUS_LOOPS_TO_FINISH) {
               if (entry.payload == nodeId) {
                 // Test if really there isn't a table (and therefore an analyser)
-                if (signalSpace.read(templateTable, CONSENSUS_TEST_TABLE_EXIST_TIME).isEmpty) {
-                  signalSpace.write(ExoEntry(TABLE_MARKER, EMPTY_TABLE), TABLE_LEASE_TIME)
-                  if (signalSpace.take(entry, ENTRY_READ_TIME).isDefined) {
+                if (signalSpace.read(templateTable, config.CONSENSUS_TEST_TABLE_EXIST_TIME).isEmpty) {
+                  signalSpace.write(ExoEntry(TABLE_MARKER, AnalyserTable(EMPTY_TABLE, config)), config.TABLE_LEASE_TIME)
+                  if (signalSpace.take(entry, 0).isDefined) {
                     // Everything worked fine and the consensus is successful
                     debug("found that consensus was successful")
                     transformIntoAnalyser()
                   } else {
                     // The consensus have failed (want-to-be-analyser entry have timeout from the space?)
                     debug("found that consensus has failed")
-                    signalSpace.take(TABLE_MARKER, ENTRY_READ_TIME)
+                    signalSpace.take(TABLE_MARKER, 0)
                   }
                 } else {
                   debug("found a table when it was trying to be an analyser")
@@ -192,7 +199,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
             }
             else {
               debug(s"is going to loop ${loopNumber + 1}")
-              Thread.sleep(CONSENSUS_MAX_SLEEP_TIME)
+              Thread.sleep(config.CONSENSUS_MAX_SLEEP_TIME)
               auxConsensusAnalyser(loopNumber + 1)
             }
           case entries: List[ExoEntry[_]] =>
@@ -202,9 +209,9 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
               if entry.payload != maxId
             } {
               debug(s"is deleting entry with id ${entry.payload}")
-              signalSpace.take(entry, ENTRY_READ_TIME)
+              signalSpace.take(entry, 0)
             }
-            Thread.sleep(consensusRandomSleepTime())
+            Thread.sleep(config.consensusRandomSleepTime())
             auxConsensusAnalyser()
         }
       }
@@ -222,11 +229,11 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
 
       val analyserBootMessage = "Node changed to analyser mode"
       println(s"$nodeFullId;$analyserBootMessage")
-      Log.receiveLog(LoggingSignal(LOGCODE_CHANGED_ACT, INFO, nodeId, ND, UNDEFINED_ACT_ID, ANALYSER_MARKER, ND, analyserBootMessage, 0))
+      Log.writeLog(LoggingSignal(LOGCODE_CHANGED_ACT, INFO, nodeId, ND, UNDEFINED_ACT_ID, ANALYSER_MARKER, ND, analyserBootMessage, 0))
 
       while (true) {
         handleSignals()
-        Thread.sleep(ANALYSER_SLEEP_TIME)
+        Thread.sleep(config.ANALYSER_SLEEP_TIME)
       }
     }
 
@@ -235,7 +242,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
       takeAndBackup(templateData) match {
         case Some(dataEntry) =>
           //if something was found
-          sleepTime = NODE_MIN_SLEEP_TIME
+          sleepTime = config.NODE_MIN_SLEEP_TIME
           process(Vector(dataEntry), consWork.activity)
           true
         case None =>
@@ -244,7 +251,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     }
 
     def takeAndBackup(tempData: DataEntry): Option[DataEntry] = {
-      dataSpace.take(tempData, ENTRY_READ_TIME) match {
+      dataSpace.take(tempData, 0) match {
         case Some(dataEntry) =>
           dataSpace.write(dataEntry.createBackup(), backupConfig.BACKUP_DATA_LEASE_TIME)
           dataSpace.write(dataEntry.createInfoBackup(), backupConfig.BACKUP_DATA_LEASE_TIME)
@@ -258,11 +265,11 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
       * a defined ID
       */
     def handleSignals(): Unit = {
-      signalSpace.take(templateMySignals, ENTRY_READ_TIME).foreach {
+      signalSpace.take(templateMySignals, 0).foreach {
         case ExoEntry(_, mySignal) => processSignal(mySignal)
       }
       if (!killWhenIdle) {
-        signalSpace.take(templateNodeSignals, ENTRY_READ_TIME).foreach {
+        signalSpace.take(templateNodeSignals, 0).foreach {
           case ExoEntry(_, nodeSignal) => processSignal(nodeSignal)
         }
       }
@@ -274,7 +281,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     def killOwnSignal(): Unit = {
       val shutdownMsg = "Node is going to shutdown"
       println(s"$nodeFullId;$shutdownMsg")
-      Log.receiveLog(LoggingSignal(LOGCODE_NODE_SHUTDOWN, INFO, nodeId, ND, ND, ND, ND, shutdownMsg, 0))
+      Log.writeLog(LoggingSignal(LOGCODE_NODE_SHUTDOWN, INFO, nodeId, ND, ND, ND, ND, shutdownMsg, 0))
       processing match {
         case None =>
         case Some(analyserThread: Analyser) =>
@@ -290,8 +297,6 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     /**
       * if its a KillSignal the node immediately aborts and dies, if its a KillGraceFullSignal
       * killWhenIdle is changed to true and before receiving something new to process the node dies
-      *
-      * @param nodeSignal
       */
     def processSignal(nodeSignal: NodeSignal): Unit = {
       nodeSignal match {
@@ -310,14 +315,14 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
           case values: Vector[DataEntry] =>
             if (values.size == joinWork.actsFrom.size) {
               // we have all values, so we can continue
-              sleepTime = NODE_MIN_SLEEP_TIME
+              sleepTime = config.NODE_MIN_SLEEP_TIME
               process(values, joinWork.activity)
             } else {
               // some values were lost ?
               val msg = s"Data was missing with injectId=${values.head.injectId}, " +
                 s"${values.size} values found, ${joinWork.actsFrom.size} values expected"
               println(nodeFullId + ";" + msg)
-              Log.receiveLog(LoggingSignal(LOGCODE_VALUES_LOST, ERROR, nodeId, ND, ND, ND, ND, msg, 0))
+              Log.writeLog(LoggingSignal(LOGCODE_VALUES_LOST, ERROR, nodeId, ND, ND, ND, ND, msg, 0))
             }
         }
         true
@@ -331,11 +336,11 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
       * @return true if both activities of the join are already present in the space
       */
     def tryToReadAll(actsFrom: Vector[String]): Boolean = {
-      dataSpace.read(templateData.setFrom(actsFrom(0)).setInjectId(null), ENTRY_READ_TIME) match {
+      dataSpace.read(templateData.setFrom(actsFrom(0)).setInjectId(null), 0) match {
         case Some(dataEntry) =>
           templateData = templateData.setInjectId(dataEntry.injectId)
           for (act <- 1 until actsFrom.size) {
-            val entry = dataSpace.read(templateData.setFrom(actsFrom(act)), ENTRY_READ_TIME)
+            val entry = dataSpace.read(templateData.setFrom(actsFrom(act)), 0)
             if (entry.isEmpty)
               return false
           }
@@ -378,9 +383,6 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     /**
       * If a worker is already defined we send the input to be processed
       * else, a new thread is created and then the input is send
-      *
-      * @param dataEntries
-      * @param activity
       */
     def process(dataEntries: Vector[DataEntry], activity: ActivityWorker): Unit = {
       val workerThread: WorkerThread =
@@ -388,13 +390,14 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
           case Some(workerThread: WorkerThread) =>
             workerThread
           case _ =>
-            val workerThread = new WorkerThread(this)
+            val workerThread = new WorkerThread(this, config)
             processing = Some(workerThread)
             workerThread.start()
             workerThread
         }
       workerThread.sendInput(activity, dataEntries)
-      templateUpdateAct = templateUpdateAct.setPayload(nodeId, activity.id, dataEntries.head.injectId, dataEntries.head.orderId)
+      templateUpdateAct = templateUpdateAct.setPayload(
+        NodeInfoType(nodeId, activity.id, Some(dataEntries.head.injectId, dataEntries.head.orderId)))
 
       var initProcessTime = System.currentTimeMillis()
       var initDataProcessTime = System.currentTimeMillis()
@@ -418,21 +421,20 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
           // So, back to normal mode
         }
       }
-      templateUpdateAct = templateUpdateAct.setPayload(nodeId, activity.id, NOT_PROCESSING_MARKER, "")
+      templateUpdateAct = templateUpdateAct.setPayload(NodeInfoType(nodeId, activity.id, None))
     }
 
     /**
       * checks in a period of time if this node needs to change
-      *
-      * @param actId
       */
     def checkNeedToChange(actId: String): Boolean = {
       val nowTime = System.currentTimeMillis()
-      if (nowTime - checkTime > NODE_CHECK_TABLE_TIME) {
+      if (nowTime - checkTime > config.NODE_CHECK_TABLE_TIME) {
         checkTime = nowTime
-        signalSpace.read(templateTable, ENTRY_READ_TIME) match {
+        signalSpace.read(templateTable, 0) match {
           case None => consensusAnalyser()
-          case Some(ExoEntry(_, table)) =>
+          case Some(ExoEntry(_, AnalyserTable(table, analyserConfig))) =>
+            updateConfig(analyserConfig)
             val filteredTable = filterActivities(table)
 
             //Test if the table still contains the current activity
@@ -474,14 +476,14 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
       * @return returns a random activity id from the table
       */
     def getRandomActivity(table: TableType): Option[String] = {
-      val tableList: List[TableEntryType] = table.toList
+      val tableList: List[(String, Int)] = table.toList
       if (tableList.isEmpty)
         None
       else {
         val total = math.max(1, tableList.unzip._2.sum)
         val n = 1.0 / tableList.size
         // excludes the current activity and others that probably don't need more nodes
-        val list: List[TableEntryType] = tableList.filter(_._2.toDouble / total < n)
+        val list: List[(String, Int)] = tableList.filter(_._2.toDouble / total < n)
 
         if (list.isEmpty)
           Some(tableList(Random.nextInt(tableList.size))._1)
@@ -493,25 +495,31 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     /**
       * sets the node to process input to a specific activity
       * updates the templates and worker
-      *
-      * @param activityId
       */
     def setActivity(activityId: String): Unit = {
-      signalSpace.read(templateAct.setMarker(activityId), ENTRY_READ_TIME) match {
+      signalSpace.read(templateAct.setMarker(activityId), 0) match {
         case None =>
-          println(s"$nodeFullId;ActivitySignal for activity $activityId not found in SignalSpace")
-          Log.receiveLog(LoggingSignal(LOGCODE_ACTIVITY_NOT_FOUND, WARN, nodeId, ND, activityId, ND, ND, s"ActivitySignal for activity $activityId not found in SignalSpace", 0))
-          Thread.sleep(ERROR_SLEEP_TIME)
+          // there is a problem with the activity or the graph was already removed
+          val graphId = activityId.substring(0, activityId.indexOf(":"))
+          signalSpace.read(GraphEntry(graphId, null), 0) match {
+            case None =>
+            // The graph that contains this activity doesn't exist anymore, just ignore
+            case Some(_) =>
+              println(s"$nodeFullId;ActivitySignal for activity $activityId not found in SignalSpace")
+              Log.writeLog(LoggingSignal(LOGCODE_ACTIVITY_NOT_FOUND, WARN, nodeId, ND, activityId, ND, ND,
+                s"ActivitySignal for activity $activityId not found in SignalSpace", 0))
+              Thread.sleep(config.ERROR_SLEEP_TIME)
+          }
         case Some(entry) => entry.payload match {
           case activitySignal: ActivitySignal =>
             ActivityCache.getActivity(activitySignal.name) match {
               case Some(activity) =>
-                templateUpdateAct = templateUpdateAct.setPayload((nodeId, activityId, NOT_PROCESSING_MARKER, ""))
+                templateUpdateAct = templateUpdateAct.setPayload(NodeInfoType(nodeId, activityId, None))
                 templateData = DataEntry(activityId, null, null, null, null)
                 val activityWorker =
                   new ActivityWorker(activityId, activitySignal.actType, activity,
                     activitySignal.params, activitySignal.outMarkers)
-                Log.receiveLog(LoggingSignal(LOGCODE_CHANGED_ACT, INFO, nodeId, ND,
+                Log.writeLog(LoggingSignal(LOGCODE_CHANGED_ACT, INFO, nodeId, ND,
                   if (worker.hasWork) worker.activity.id else UNDEFINED_ACT_ID,
                   activityId, ND, "Node changed Activity", 0))
                 activitySignal.inMarkers match {
@@ -522,11 +530,12 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
                 }
                 // send the updated information
                 updateNodeInfo(force = true)
-                sleepTime = NODE_MIN_SLEEP_TIME
+                sleepTime = config.NODE_MIN_SLEEP_TIME
               case None =>
                 println(nodeFullId + ";Class could not be loaded: " + activitySignal.name)
-                Log.receiveLog(LoggingSignal(LOGCODE_CLASS_NOT_LOADED, WARN, nodeId, ND, ND, ND, ND, "Class could not be loaded: " + activitySignal.name, 0))
-                Thread.sleep(ERROR_SLEEP_TIME)
+                Log.writeLog(LoggingSignal(LOGCODE_CLASS_NOT_LOADED, WARN, nodeId, ND, ND, ND, ND,
+                  "Class could not be loaded: " + activitySignal.name, 0))
+                Thread.sleep(config.ERROR_SLEEP_TIME)
             }
         }
       }
@@ -534,7 +543,7 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
 
     def setNeutralMode(): Unit = {
       worker = NoWork
-      templateUpdateAct = templateUpdateAct.setPayload((nodeId, UNDEFINED_ACT_ID, NOT_PROCESSING_MARKER, ""))
+      templateUpdateAct = templateUpdateAct.setPayload(NodeInfoType(nodeId, UNDEFINED_ACT_ID, None))
       updateNodeInfo(force = true)
     }
   }
