@@ -44,6 +44,19 @@ abstract class ProtocolConfig extends Serializable {
   def consensusRandomSleepTime(): Long =
     CONSENSUS_MIN_SLEEP_TIME + (math.random() * (CONSENSUS_MAX_SLEEP_TIME - CONSENSUS_MIN_SLEEP_TIME)).toLong
 
+  // Backups constants
+  val BACKUP_DATA_LEASE_TIME: Long
+
+  final def RENEW_BACKUP_ENTRIES_TIME: Long = BACKUP_DATA_LEASE_TIME / 3 * 2
+
+  final def MAX_BACKUPS_IN_SPACE: Long = 1 + BACKUP_DATA_LEASE_TIME / RENEW_BACKUP_ENTRIES_TIME
+
+  val BACKUP_TIMEOUT_TIME: Long
+
+  final def ANALYSER_CHECK_BACKUP_INFO: Long = BACKUP_TIMEOUT_TIME / 3
+
+  final def SEND_STILL_PROCESSING_TIME: Long = BACKUP_TIMEOUT_TIME / 3
+
 }
 
 object ProtocolConfig {

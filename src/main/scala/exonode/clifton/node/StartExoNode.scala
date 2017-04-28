@@ -70,7 +70,7 @@ object StartExoNode {
             CliftonNode.DEBUG = true
           case "--version" =>
             //FIXME get version dynamically ?
-            println("ExoNode version: 1.2-SNAPSHOT")
+            println("ExoNode version: 1.2")
             System.exit(0)
           case _ =>
             println("Unknown command: " + cmd)

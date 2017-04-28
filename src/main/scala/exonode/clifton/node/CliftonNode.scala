@@ -3,8 +3,8 @@ package exonode.clifton.node
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 import java.util.{Date, UUID}
 
+import exonode.clifton.config.ProtocolConfig
 import exonode.clifton.config.ProtocolConfig._
-import exonode.clifton.config.{BackupConfig, ConfigLoader, ProtocolConfig}
 import exonode.clifton.node.Log.{ERROR, INFO, ND, WARN}
 import exonode.clifton.node.entries.{DataEntry, ExoEntry, GraphEntry}
 import exonode.clifton.node.work._
@@ -20,7 +20,7 @@ import scala.util.Random
   * Analyser is responsible for updating the space with the table about the state of every node using the same signal space
   * Worker is responsible for processing input for some activity
   */
-class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node {
+class CliftonNode extends Thread with Node {
 
   val nodeId: String = UUID.randomUUID().toString
 
@@ -253,8 +253,8 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
     def takeAndBackup(tempData: DataEntry): Option[DataEntry] = {
       dataSpace.take(tempData, 0) match {
         case Some(dataEntry) =>
-          dataSpace.write(dataEntry.createBackup(), backupConfig.BACKUP_DATA_LEASE_TIME)
-          dataSpace.write(dataEntry.createInfoBackup(), backupConfig.BACKUP_DATA_LEASE_TIME)
+          dataSpace.write(dataEntry.createBackup(), config.BACKUP_DATA_LEASE_TIME)
+          dataSpace.write(dataEntry.createInfoBackup(), config.BACKUP_DATA_LEASE_TIME)
           Some(dataEntry)
         case None => None
       }
@@ -375,8 +375,8 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
 
     def renewBackup(dataEntries: Vector[DataEntry]): Unit = {
       for (dataEntry <- dataEntries) {
-        dataSpace.write(dataEntry.createBackup(), backupConfig.BACKUP_DATA_LEASE_TIME)
-        dataSpace.write(dataEntry.createInfoBackup(), backupConfig.BACKUP_DATA_LEASE_TIME)
+        dataSpace.write(dataEntry.createBackup(), config.BACKUP_DATA_LEASE_TIME)
+        dataSpace.write(dataEntry.createInfoBackup(), config.BACKUP_DATA_LEASE_TIME)
       }
     }
 
@@ -405,11 +405,11 @@ class CliftonNode(implicit backupConfig: BackupConfig) extends Thread with Node 
       while (workerThread.threadIsBusy) {
         handleSignals()
         val currentTime = System.currentTimeMillis()
-        if (currentTime - initProcessTime > backupConfig.SEND_STILL_PROCESSING_TIME) {
+        if (currentTime - initProcessTime > config.SEND_STILL_PROCESSING_TIME) {
           initProcessTime = currentTime
           updateNodeInfo(force = true)
         }
-        if (currentTime - initDataProcessTime > backupConfig.RENEW_BACKUP_ENTRIES_TIME) {
+        if (currentTime - initDataProcessTime > config.RENEW_BACKUP_ENTRIES_TIME) {
           initDataProcessTime = currentTime
           renewBackup(dataEntries)
         }

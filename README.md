@@ -10,6 +10,9 @@ corresponding inputs are available.
 For more information about the Exonode: http://bit.ly/2mBHBNd
 
 ## Releases
+28/04/2017 <br />
+--> **ExoNode v1.2** <br />
+
 10/04/2017 <br />
 --> **ExoNode v1.1** <br />
 

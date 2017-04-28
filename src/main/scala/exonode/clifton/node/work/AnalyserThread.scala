@@ -3,8 +3,8 @@ package exonode.clifton.node.work
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import exonode.clifton.config.ProtocolConfig
 import exonode.clifton.config.ProtocolConfig.{AnalyserTable, NodeInfoType, TableType}
-import exonode.clifton.config.{BackupConfig, ProtocolConfig}
 import exonode.clifton.node.Log.{ERROR, ND, WARN}
 import exonode.clifton.node._
 import exonode.clifton.node.entries.{BackupInfoEntry, ExoEntry, GraphEntry}
@@ -21,7 +21,7 @@ import scala.language.implicitConversions
   * are processing some activity. Analyser Node it's one of the modes of what a clifton node
   * can be transformed.
   */
-class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) extends Thread with BusyWorking with Analyser {
+class AnalyserThread(analyserId: String) extends Thread with BusyWorking with Analyser {
 
   //the number of entries to be taken from space from a defined time
   private val MAX_INFO_CALL = 20
@@ -83,20 +83,22 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
     }
   }
 
-  private def updateBackupTable(backupTable: TableBackupType, info: NodeInfoType, currentTime: Long): TableBackupType = {
+  private def updateBackupTable(config: ProtocolConfig, backupTable: TableBackupType,
+                                info: NodeInfoType, currentTime: Long): TableBackupType = {
     val NodeInfoType(_, actId, Some((injectId, orderId))) = info
     val backupEntry = (actId, injectId, orderId)
     if (backupTable.contains(backupEntry)) {
-      backupTable.updated(backupEntry, currentTime + backupConfig.BACKUP_TIMEOUT_TIME)
+      backupTable.updated(backupEntry, currentTime + config.BACKUP_TIMEOUT_TIME)
     } else backupTable
   }
 
-  private def updateBackup(table: TableBackupType, info: BackupInfoEntry, currentTime: Long): TableBackupType = {
+  private def updateBackup(config: ProtocolConfig, table: TableBackupType,
+                           info: BackupInfoEntry, currentTime: Long): TableBackupType = {
     val infoBackup = (info.toAct, info.injectId, info.orderId)
     if (table.contains(infoBackup))
       table
     else
-      table.updated(infoBackup, currentTime + backupConfig.BACKUP_TIMEOUT_TIME)
+      table.updated(infoBackup, currentTime + config.BACKUP_TIMEOUT_TIME)
   }
 
   private def convertToData(activityTo: String, injectId: String, orderId: String): BackupInfoEntry = {
@@ -148,7 +150,7 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
           val trackUpdateTable = notProcessing.foldLeft(trackerTable)(
             (tracker, info) => updateTrackerTable(config, tracker, info, currentTime))
           val backupUpdateTable = processing.foldLeft(backupsTable)(
-            (backupTable, info) => updateBackupTable(backupTable, info, currentTime))
+            (backupTable, info) => updateBackupTable(config, backupTable, info, currentTime))
           (trackUpdateTable, backupUpdateTable)
         } else {
           (trackerTable, backupsTable)
@@ -164,10 +166,11 @@ class AnalyserThread(analyserId: String)(implicit backupConfig: BackupConfig) ex
 
       // Update backup information
       val (updatedBackupsTable, newBackupsTime) =
-        if (currentTime - backupsTime > backupConfig.ANALYSER_CHECK_BACKUP_INFO) {
+        if (currentTime - backupsTime > config.ANALYSER_CHECK_BACKUP_INFO) {
           val maxNodes = originalDistributionTable.size
           val backupInfos = dataSpace.readMany(templateBackup, updatedTrackerTable.size * maxNodes)
-          val notFilterBackupTable = backupInfos.foldLeft(newBackupTable)((table, info) => updateBackup(table, info, currentTime))
+          val notFilterBackupTable = backupInfos.foldLeft(newBackupTable)(
+            (table, info) => updateBackup(config, table, info, currentTime))
           val (expiredBackups, backupTable) = notFilterBackupTable.partition(_._2 < currentTime)
           for (((activityTo, injectId, orderId), _) <- expiredBackups)
             recoveryData(config, activityTo, injectId, orderId)

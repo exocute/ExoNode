@@ -2,14 +2,13 @@ package exonode
 
 import java.io.Serializable
 
+import exonode.clifton.config.ProtocolConfig
 import exonode.clifton.config.ProtocolConfig.AnalyserTable
-import exonode.clifton.config.{ConfigLoader, ProtocolConfig}
 import exonode.clifton.node.entries.ExoEntry
 import exonode.clifton.node.{CliftonNode, SpaceCache}
 import exonode.clifton.signals.KillSignal
 import org.scalatest.{BeforeAndAfter, FlatSpec}
 
-import scala.collection.immutable.HashMap
 import scala.language.implicitConversions
 
 /**
@@ -20,10 +19,6 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
   private val space = SpaceCache.getSignalSpace
 
   private val MAX_TIME_FOR_EACH_TEST = 60 * 60 * 1000
-
-  private implicit def seqToHashMap[A, B](seq: Seq[(A, B)]): HashMap[A, B] = {
-    HashMap(seq: _*)
-  }
 
   private def writeToSpace(marker: String, input: Serializable) = {
     space.write(ExoEntry(marker, input), MAX_TIME_FOR_EACH_TEST)
@@ -55,10 +50,6 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
     nodes.foreach(node => node.join())
   }
 
-  private def killNodesById(nodeIds: List[String]): Unit = {
-    nodeIds.foreach(nodeId => writeToSpace(nodeId, KillSignal))
-  }
-
   private val EXPECTED_TIME_TO_CONSENSUS = 10 * 1000 +
     config.CONSENSUS_MAX_SLEEP_TIME * (1 + config.CONSENSUS_LOOPS_TO_FINISH)
 
@@ -82,7 +73,7 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
 
   "Launch 5 nodes" should "launch 5 nodes (4 + 1 analyser)" in {
     val N = 5
-    val ids = launchNNodes(N)
+    launchNNodes(N)
     Thread.sleep(EXPECTED_TIME_TO_CONSENSUS)
     // time to read infos into table
     Thread.sleep(5 * 1000 + 3 * config.ANALYSER_SLEEP_TIME)
@@ -101,7 +92,7 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
     launchNNodes(4)
 
     //kill analyser
-    killNodesById(List(analyserNode.nodeId))
+    killNodes(List(analyserNode))
     Thread.sleep(5 * 1000)
     Thread.sleep(EXPECTED_TIME_TO_CONSENSUS)
     assert(readTableFromSpace().isDefined)

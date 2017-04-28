@@ -11,10 +11,12 @@ import scala.collection.mutable
   */
 object ActivityCache {
 
-  private val _cache = new mutable.HashMap[String, Activity]()
+  private val MAX_SIZE = 200
+  private val cache = mutable.HashMap[String, Activity]()
+  private var cacheOrder = Vector[String]()
 
   def getActivity(name: String): Option[Activity] = {
-    _cache.get(name) match {
+    cache.get(name) match {
       case None =>
         try {
           // go get the required jar
@@ -24,7 +26,13 @@ object ActivityCache {
             val acl = cl.loadClass(name)
             acl.newInstance match {
               case activity: Activity =>
-                _cache.put(activity.getClass.getName, activity)
+                val id = activity.getClass.getName
+                cacheOrder = cacheOrder :+ id
+                if (cache.size == MAX_SIZE) {
+                  cache.remove(cacheOrder.head)
+                  cacheOrder = cacheOrder.tail
+                }
+                cache.put(id, activity)
                 Some(activity)
               case _ => None
             }

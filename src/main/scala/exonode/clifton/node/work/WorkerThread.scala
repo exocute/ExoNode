@@ -3,7 +3,7 @@ package exonode.clifton.node.work
 import java.io.Serializable
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 
-import exonode.clifton.config.{BackupConfig, ProtocolConfig}
+import exonode.clifton.config.ProtocolConfig
 import exonode.clifton.node.Log.{INFO, ND, WARN}
 import exonode.clifton.node.entries.{DataEntry, FlatMapEntry}
 import exonode.clifton.node.{CliftonNode, Log, Node, SpaceCache}
@@ -15,7 +15,7 @@ import exonode.clifton.signals.{ActivityFilterType, ActivityFlatMapType, Activit
   * This thread is continually running till be shutdown
   * it processes input at the same time that the node continues to handle signals
   */
-class WorkerThread(node: Node, implicit val config: ProtocolConfig)(implicit backupConfig: BackupConfig) extends Thread with BusyWorking with Worker {
+class WorkerThread(node: Node, val config: ProtocolConfig) extends Thread with BusyWorking with Worker {
 
   private val dataSpace = SpaceCache.getDataSpace
 
@@ -149,8 +149,8 @@ class WorkerThread(node: Node, implicit val config: ProtocolConfig)(implicit bac
 
   private def clearBackups(dataEntries: Vector[DataEntry]) {
     for (dataEntry <- dataEntries) {
-      dataSpace.takeMany(dataEntry.createBackup(), backupConfig.MAX_BACKUPS_IN_SPACE)
-      dataSpace.takeMany(dataEntry.createInfoBackup(), backupConfig.MAX_BACKUPS_IN_SPACE)
+      dataSpace.takeMany(dataEntry.createBackup(), config.MAX_BACKUPS_IN_SPACE)
+      dataSpace.takeMany(dataEntry.createInfoBackup(), config.MAX_BACKUPS_IN_SPACE)
     }
   }
 
