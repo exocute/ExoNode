@@ -67,7 +67,7 @@ object StartExoNode {
             println(getHelpString)
             System.exit(0)
           case "--DEBUG" =>
-            CliftonNode.DEBUG = true
+            CliftonNode.Debug = true
           case "--version" =>
             //FIXME get version dynamically ?
             println("ExoNode version: 1.2")

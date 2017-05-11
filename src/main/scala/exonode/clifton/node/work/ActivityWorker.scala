@@ -8,7 +8,10 @@ import exonode.clifton.signals.ActivityType
 /**
   * Created by #GrowinScala
   */
-class ActivityWorker(val id: String, val actType: ActivityType, activity: Activity,
-                     params: Vector[String], val acsTo: Vector[String]) {
+class ActivityWorker(val id: String,
+                     val actType: ActivityType,
+                     activity: Activity,
+                     params: Vector[String],
+                     val acsTo: Vector[String]) {
   def process(input: Serializable): Serializable = activity.process(input, params)
 }

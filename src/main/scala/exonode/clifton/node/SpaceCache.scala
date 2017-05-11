@@ -10,12 +10,11 @@ import scala.collection.mutable
 /**
   * Created by #GrowinScala
   *
-  * Default parameters are set to LocalHost but can be changed
+  * Default parameters of all IPs are set to localhost but can be changed.
   *
   * SignalSpace => saves the graph representation, Log infos, nodes info
   * DataSpace => saves the data and backups of all activities
   * JarSpace => saves FlyClassEntry and FlyJarEntry of all jars
-  *
   */
 object SpaceCache {
 
@@ -29,29 +28,23 @@ object SpaceCache {
   var dataHost: String = "localhost"
 
   /**
-    * finds a flyspace by the host defined
+    * Finds a flyspace by a tag.
     *
-    * @param tag
-    * @param host
-    * @return if its found returns the flyspace on Host
+    * Provide a valid host when creating a new connection to a FlySpace.
     */
   private def getSpace(tag: String, host: String): ScalaFly = {
-    spaceMap.get(tag) match {
-      case Some(space) => space
-      case None =>
-        try {
-          if (host.isEmpty) {
-            val finder: FlyFinder = new FlyFinder()
-            spaceMap.put(tag, ScalaFly(finder.find(tag)))
-          } else
-            spaceMap.put(tag, ScalaFly(FlyFactory.makeFly(host)))
-          spaceMap(tag)
-        } catch {
-          case e: Exception =>
-            //Log.error("Failed to locate space")
-            throw new Exception("Failed to locate space")
-        }
-    }
+    spaceMap.getOrElseUpdate(tag,
+      try {
+        if (host.isEmpty) {
+          val finder: FlyFinder = new FlyFinder()
+          ScalaFly(finder.find(tag))
+        } else
+          ScalaFly(FlyFactory.makeFly(host))
+      } catch {
+        case e: Exception =>
+          //Log.error("Failed to locate space")
+          throw new Exception("Failed to locate space")
+      })
   }
 
   def getSignalSpace: ScalaFly = getSpace(signal, signalHost)
@@ -60,6 +53,9 @@ object SpaceCache {
 
   def getJarSpace: ScalaFly = getSpace(jar, jarHost)
 
+  /**
+    * Cleans entries used by Exocute from all FlySpaces.
+    */
   def cleanAllSpaces(): Unit = {
     def clean(space: ScalaFly, cleanTemplate: AnyRef): Unit = {
       while (space.take(cleanTemplate, 0).isDefined) {}

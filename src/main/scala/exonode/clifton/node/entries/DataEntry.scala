@@ -5,8 +5,8 @@ import java.io.Serializable
 /**
   * Created by #GrowinScala
   *
-  * DataEntry transports the results of an activity
-  * injectID is unique for every inject made. This allows to make joins and forks correctly
+  * DataEntry transports the results of an activity.
+  * InjectId is unique for every inject made. This allows to make joins and forks correctly
   * and to track the process in the graph
   */
 case class DataEntry(toAct: String, fromAct: String, injectId: String, orderId: String, data: Option[Serializable]) {

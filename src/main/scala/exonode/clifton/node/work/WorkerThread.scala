@@ -4,10 +4,10 @@ import java.io.Serializable
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 
 import exonode.clifton.config.ProtocolConfig
-import exonode.clifton.node.Log.{INFO, ND, WARN}
 import exonode.clifton.node.entries.{DataEntry, FlatMapEntry}
-import exonode.clifton.node.{CliftonNode, Log, Node, SpaceCache}
-import exonode.clifton.signals.{ActivityFilterType, ActivityFlatMapType, ActivityMapType, LoggingSignal}
+import exonode.clifton.node.{CliftonNode, Node, SpaceCache}
+import exonode.clifton.signals.Log.{Log, LogErrorProcessing, LogFinishedProcessing, LogProcessingInput}
+import exonode.clifton.signals.{ActivityFilterType, ActivityFlatMapType, ActivityMapType}
 
 /**
   * Created by #GrowinScala
@@ -47,7 +47,7 @@ class WorkerThread(node: Node, val config: ProtocolConfig) extends Thread with B
       case e: Throwable =>
         val msg = "Message: " + e.toString + ", " + e.getStackTrace.mkString(", ")
         println(nodeId + ";" + msg)
-        Log.writeLog(LoggingSignal(ProtocolConfig.LOGCODE_ERROR_PROCESSING, WARN, nodeId, ND, ND, ND, ND, msg, 0))
+        Log.writeLog(LogErrorProcessing(nodeId, msg))
     }
   }
 
@@ -57,8 +57,7 @@ class WorkerThread(node: Node, val config: ProtocolConfig) extends Thread with B
 
   def process(activity: ActivityWorker, dataEntries: Vector[DataEntry]): Unit = {
     val runningSince = System.currentTimeMillis()
-    Log.writeLog(LoggingSignal(ProtocolConfig.LOGCODE_PROCESSING_INPUT, INFO, nodeId, getGraphID(activity.id),
-      ND, activity.id, dataEntries.head.injectId, "Node started processing", 0))
+    Log.writeLog(LogProcessingInput(nodeId, dataEntries.head.fromAct, activity.id, dataEntries.head.injectId))
 
     val result: Either[Option[Seq[Serializable]], Option[Serializable]] = {
       if (dataEntries.exists(dataEntry => dataEntry.data.isEmpty)) {
@@ -87,9 +86,8 @@ class WorkerThread(node: Node, val config: ProtocolConfig) extends Thread with B
     }
 
     val timeProcessing = System.currentTimeMillis() - runningSince
-    Log.writeLog(LoggingSignal(ProtocolConfig.LOGCODE_FINISHED_PROCESSING, INFO, nodeId, getGraphID(activity.id), activity.id,
-      activity.acsTo.head.split(':').last, dataEntries.head.injectId,
-      s"Node finished processing in ${timeProcessing}ms", timeProcessing))
+    Log.writeLog(LogFinishedProcessing(nodeId, activity.id,
+      activity.acsTo.head.split(':').last, dataEntries.head.injectId, timeProcessing))
     if (activity.actType == ActivityFlatMapType)
       insertResultFlatten(result.left.get, dataEntries, activity)
     else
@@ -106,7 +104,7 @@ class WorkerThread(node: Node, val config: ProtocolConfig) extends Thread with B
     val injId = dataEntries.head.injectId
 
     def sendResult(actTo: String, orderId: String, result: Option[Serializable]): Unit = {
-      dataSpace.write(DataEntry(actTo, actId, injId, orderId, result), config.DATA_LEASE_TIME)
+      dataSpace.write(DataEntry(actTo, actId, injId, orderId, result), config.DataLeaseTime)
     }
 
     result match {
@@ -116,7 +114,7 @@ class WorkerThread(node: Node, val config: ProtocolConfig) extends Thread with B
         for (actTo <- actsTo)
           sendResult(actTo, orderId, None)
         // The collector only needs to know that there is one element (that is filtered)
-        dataSpace.write(FlatMapEntry.fromInjectId(injId, orderId, 1), config.DATA_LEASE_TIME)
+        dataSpace.write(FlatMapEntry.fromInjectId(injId, orderId, 1), config.DataLeaseTime)
       case Some(dataSeq) =>
         // Send the values seq to each activity of the fork
         val orderId = dataEntries.head.orderId
@@ -125,7 +123,7 @@ class WorkerThread(node: Node, val config: ProtocolConfig) extends Thread with B
           actTo <- actsTo
         } sendResult(actTo, s"$orderId:$index", Some(value))
         // The collector needs to know how many elements there are
-        dataSpace.write(FlatMapEntry.fromInjectId(injId, orderId, dataSeq.size), config.DATA_LEASE_TIME)
+        dataSpace.write(FlatMapEntry.fromInjectId(injId, orderId, dataSeq.size), config.DataLeaseTime)
     }
 
     clearBackups(dataEntries)
@@ -141,7 +139,7 @@ class WorkerThread(node: Node, val config: ProtocolConfig) extends Thread with B
 
     for (actTo <- actsTo) {
       val dataEntry = DataEntry(actTo, actId, injId, orderId, result)
-      dataSpace.write(dataEntry, config.DATA_LEASE_TIME)
+      dataSpace.write(dataEntry, config.DataLeaseTime)
     }
 
     clearBackups(dataEntries)
@@ -149,8 +147,8 @@ class WorkerThread(node: Node, val config: ProtocolConfig) extends Thread with B
 
   private def clearBackups(dataEntries: Vector[DataEntry]) {
     for (dataEntry <- dataEntries) {
-      dataSpace.takeMany(dataEntry.createBackup(), config.MAX_BACKUPS_IN_SPACE)
-      dataSpace.takeMany(dataEntry.createInfoBackup(), config.MAX_BACKUPS_IN_SPACE)
+      dataSpace.takeMany(dataEntry.createBackup(), config.MaxBackupsInSpace)
+      dataSpace.takeMany(dataEntry.createInfoBackup(), config.MaxBackupsInSpace)
     }
   }
 

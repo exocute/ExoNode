@@ -5,7 +5,7 @@ import java.io.Serializable
 /**
   * Created by #GrowinScala
   *
-  * Generic Entry
+  * Generic entry to use in the FlySpaces
   */
 case class ExoEntry[T <: Serializable](marker: String, payload: T) {
 

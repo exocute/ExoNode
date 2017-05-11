@@ -6,104 +6,92 @@ import scala.collection.immutable.HashMap
 
 /**
   * Created by #GrowinScala
+  *
+  * Contains all the constants used by the nodes.
   */
 abstract class ProtocolConfig extends Serializable {
 
-  val ID: String = UUID.randomUUID().toString
+  val Id: String = UUID.randomUUID().toString
 
   // Lease times
-  val DATA_LEASE_TIME: Long
-  val NODE_INFO_LEASE_TIME: Long
-  val TABLE_LEASE_TIME: Long
+  val DataLeaseTime: Long
+  val NodeInfoLeaseTime: Long
+  val TableLeaseTime: Long
 
   // Check space for updates
-  val TABLE_UPDATE_TIME: Long
-  val NODE_CHECK_TABLE_TIME: Long
-  val ANALYSER_CHECK_GRAPHS_TIME: Long
+  val TableUpdateTime: Long
+  val NodeCheckTableTime: Long
+  val AnalyserCheckGraphsTime: Long
 
   // Other times
-  final def NODE_INFO_EXPIRY_TIME: Long = NODE_CHECK_TABLE_TIME * 2
+  final def NodeInfoExpiryTime: Long = NodeCheckTableTime * 2
 
-  val NODE_MIN_SLEEP_TIME: Long
-  val NODE_MAX_SLEEP_TIME: Long
-  val ANALYSER_SLEEP_TIME: Long
-  val ERROR_SLEEP_TIME: Long
+  val NodeMinSleepTime: Long
+  val NodeMaxSleepTime: Long
+  val AnalyserSleepTime: Long
+  val ErrorSleepTime: Long
 
   // Consensus constants
-  val CONSENSUS_ENTRIES_TO_READ: Int
-  val CONSENSUS_LOOPS_TO_FINISH: Int
+  val ConsensusEntriesToRead: Int
+  val ConsensusLoopsToFinish: Int
 
-  val CONSENSUS_TEST_TABLE_EXIST_TIME: Long
+  val ConsensusTestTableExistTime: Long
 
   // (should change with the amount of nodes in space: more nodes -> more time)
-  val CONSENSUS_WANT_TBA_LEASE_TIME: Long
+  val ConsensusWantAnalyserTime: Long
 
-  val CONSENSUS_MIN_SLEEP_TIME: Long
-  val CONSENSUS_MAX_SLEEP_TIME: Long
+  val ConsensusMinSleepTime: Long
+  val ConsensusMaxSleepTime: Long
 
   def consensusRandomSleepTime(): Long =
-    CONSENSUS_MIN_SLEEP_TIME + (math.random() * (CONSENSUS_MAX_SLEEP_TIME - CONSENSUS_MIN_SLEEP_TIME)).toLong
+    ConsensusMinSleepTime + (math.random() * (ConsensusMaxSleepTime - ConsensusMinSleepTime)).toLong
 
   // Backups constants
-  val BACKUP_DATA_LEASE_TIME: Long
+  val BackupDataLeaseTime: Long
 
-  final def RENEW_BACKUP_ENTRIES_TIME: Long = BACKUP_DATA_LEASE_TIME / 3 * 2
+  final def RenewBackupEntriesTime: Long = BackupDataLeaseTime / 3 * 2
 
-  final def MAX_BACKUPS_IN_SPACE: Long = 1 + BACKUP_DATA_LEASE_TIME / RENEW_BACKUP_ENTRIES_TIME
+  final def MaxBackupsInSpace: Long = 1 + BackupDataLeaseTime / RenewBackupEntriesTime
 
-  val BACKUP_TIMEOUT_TIME: Long
+  val BackupTimeoutTime: Long
 
-  final def ANALYSER_CHECK_BACKUP_INFO: Long = BACKUP_TIMEOUT_TIME / 3
+  final def AnalyserCheckBackupInfo: Long = BackupTimeoutTime / 3
 
-  final def SEND_STILL_PROCESSING_TIME: Long = BACKUP_TIMEOUT_TIME / 3
-
+  final def SendStillProcessingTime: Long = BackupTimeoutTime / 3
 }
 
 object ProtocolConfig {
-  final val MIN: Long = 60 * 1000
-  final val HOUR: Long = 60 * MIN
+  final val Min: Long = 60 * 1000
+  final val Hour: Long = 60 * Min
 
-  final val LOG_LEASE_TIME: Long = 1 * HOUR
+  final val LogLeaseTime: Long = 1 * Hour
 
-  val INJECT_SIGNAL_MARKER = ">"
-  val COLLECT_SIGNAL_MARKER = "<"
-  val LOG_MARKER = "LOG"
-  val INFO_MARKER = "INFO"
-  val TABLE_MARKER = "TABLE"
-  val NODE_SIGNAL_MARKER = "NODESIGNAL"
-  val NOT_PROCESSING_MARKER = "NOT_PROCESSING"
-  val WANT_TO_BE_ANALYSER_MARKER = "WANT_TO_BE_ANALYSER"
-  val CONFIG_MARKER = "CONFIG"
+  val InjectSignalMarker = ">"
+  val CollectSignalMarker = "<"
+  val LogMarker = "LOG"
+  val InfoMarker = "INFO"
+  val TableMarker = "TABLE"
+  val NodeSignalMarker = "NODESIGNAL"
+  val NotProcessingMarker = "NOT_PROCESSING"
+  val WantToBeAnalyserMarker = "WANT_TO_BE_ANALYSER"
+  val ConfigMarker = "CONFIG"
 
-  val LOGCODE_STARTED_NODE = 0
-  val LOGCODE_STARTED_GRAPH = 1
-  val LOGCODE_CHANGED_ACT = 2
-  val LOGCODE_PROCESSING_INPUT = 3
-  val LOGCODE_FINISHED_PROCESSING = 4
-  val LOGCODE_FAILED = 5
-  val LOGCODE_DATA_RECOVERED = 6
-  val LOGCODE_INJECTED = 7
-  val LOGCODE_COLLECTED = 8
-  val LOGCODE_ERROR_PROCESSING = 9
-  val LOGCODE_NODE_SHUTDOWN = 10
-  val LOGCODE_VALUES_LOST = 11
-  val LOGCODE_ACTIVITY_NOT_FOUND = 12
-  val LOGCODE_CLASS_NOT_LOADED = 13
-  val LOGCODE_INFORMATION_LOST = 14
+  val AnalyserMarker = "@"
+  val UndefinedActId = "?"
 
-  val ANALYSER_MARKER = "@"
-  val UNDEFINED_ACT_ID = "?"
-
-  val LOG_SEPARATOR = ";"
+  val LogSeparator = ";"
 
   type TableType = HashMap[String, Int]
 
   case class AnalyserTable(table: TableType, config: ProtocolConfig)
 
-  val EMPTY_TABLE: TableType = HashMap[String, Int]()
+  val EmptyTable: TableType = HashMap[String, Int]()
 
+  /**
+    * Representation of the node state
+    */
   case class NodeInfoType(nodeId: String, activityId: String, dataId: Option[(String, String)])
 
-  val DEFAULT = ConfigLoader.DEFAULT
+  val Default = ConfigLoader.Default
 
 }

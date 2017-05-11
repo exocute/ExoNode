@@ -24,8 +24,8 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
     space.write(ExoEntry(marker, input), MAX_TIME_FOR_EACH_TEST)
   }
 
-  private val tabEntry = ExoEntry[AnalyserTable](ProtocolConfig.TABLE_MARKER, null)
-  private val config = ProtocolConfig.DEFAULT
+  private val tabEntry = ExoEntry[AnalyserTable](ProtocolConfig.TableMarker, null)
+  private val config = ProtocolConfig.Default
 
   private def readTableFromSpace(): Option[ExoEntry[AnalyserTable]] = {
     space.read(tabEntry, 0L)
@@ -51,7 +51,7 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
   }
 
   private val EXPECTED_TIME_TO_CONSENSUS = 10 * 1000 +
-    config.CONSENSUS_MAX_SLEEP_TIME * (1 + config.CONSENSUS_LOOPS_TO_FINISH)
+    config.ConsensusMaxSleepTime * (1 + config.ConsensusLoopsToFinish)
 
   before {
     SpaceCache.cleanAllSpaces()
@@ -76,7 +76,7 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
     launchNNodes(N)
     Thread.sleep(EXPECTED_TIME_TO_CONSENSUS)
     // time to read infos into table
-    Thread.sleep(5 * 1000 + 3 * config.ANALYSER_SLEEP_TIME)
+    Thread.sleep(5 * 1000 + 3 * config.AnalyserSleepTime)
     readTableFromSpace() match {
       case None =>
         fail()
@@ -99,13 +99,13 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
   }
 
   {
-    CliftonNode.DEBUG = true
+    CliftonNode.Debug = true
     for (n <- 21 to 1 by -2) {
       s"Only 1 analyser with $n nodes" should "check if there is only one analyser in the space" in {
         only1Analyser(n)
       }
     }
-    CliftonNode.DEBUG = false
+    CliftonNode.Debug = false
   }
 
   private def only1Analyser(nodes: Int): Unit = {

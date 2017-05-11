@@ -14,7 +14,7 @@ import scala.collection.mutable
   */
 class CliftonClassLoader() extends ClassLoader(getClass.getClassLoader) {
 
-  private val CLASS_EXTENSION = ".class"
+  private val ClassExtension = ".class"
   private val classByteCodes = new mutable.HashMap[String, Array[Byte]]()
 
   def init(jar: Array[Byte]): Unit = {
@@ -32,7 +32,7 @@ class CliftonClassLoader() extends ClassLoader(getClass.getClassLoader) {
         je != null
       }) {
         // only load the classes
-        if (je.getName.endsWith(CLASS_EXTENSION)) {
+        if (je.getName.endsWith(ClassExtension)) {
           var entrySize = je.getSize.toInt
 
           // Jar is probably compressed, so we don't know the size of it.
@@ -71,8 +71,8 @@ class CliftonClassLoader() extends ClassLoader(getClass.getClassLoader) {
           // from the
           val className = {
             val name = je.getName.replace('/', '.').replace('\\', '.')
-            if (name.endsWith(CLASS_EXTENSION))
-              name.substring(0, name.length - CLASS_EXTENSION.length)
+            if (name.endsWith(ClassExtension))
+              name.substring(0, name.length - ClassExtension.length)
             else
               name
           }

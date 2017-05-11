@@ -2,8 +2,11 @@ package exonode.clifton.node.entries
 
 /**
   * Created by #GrowinScala
+  *
+  * Entry used by the collector to collect all the data in order they were injected.
   */
-case class FlatMapEntry(graphId: String, orderId: String,
+case class FlatMapEntry(graphId: String,
+                        orderId: String,
                         // needs to be an Integer from Java to allow null values
                         size: java.lang.Integer) {
 }
