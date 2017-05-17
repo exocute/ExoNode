@@ -9,6 +9,8 @@ import exonode.clifton.node.{CliftonNode, Node, SpaceCache}
 import exonode.clifton.signals.Log.{Log, LogErrorProcessing, LogFinishedProcessing, LogProcessingInput}
 import exonode.clifton.signals.{ActivityFilterType, ActivityFlatMapType, ActivityMapType}
 
+import scala.annotation.tailrec
+
 /**
   * Created by #GrowinScala
   *
@@ -34,13 +36,7 @@ class WorkerThread(node: Node, val config: ProtocolConfig) extends Thread with B
 
   override def run(): Unit = {
     try {
-      while (true) {
-        val (activity, input) = queue.take()
-        process(activity, input)
-        isBusy = false
-        //TODO: find a better way to notify the node that we finished processing
-        node.finishedProcessing()
-      }
+      processNextInput()
     } catch {
       case e: InterruptedException =>
         println("InterruptedException: " + e.getMessage)
@@ -51,11 +47,17 @@ class WorkerThread(node: Node, val config: ProtocolConfig) extends Thread with B
     }
   }
 
-  def getGraphID(s: String): String = {
-    s.split(':').head
+  @tailrec
+  private def processNextInput(): Unit = {
+    val (activity, input) = queue.take()
+    process(activity, input)
+    isBusy = false
+    //TODO: find a better way to notify the node that we finished processing
+    node.finishedProcessing()
+    processNextInput()
   }
 
-  def process(activity: ActivityWorker, dataEntries: Vector[DataEntry]): Unit = {
+  private def process(activity: ActivityWorker, dataEntries: Vector[DataEntry]): Unit = {
     val runningSince = System.currentTimeMillis()
     Log.writeLog(LogProcessingInput(nodeId, dataEntries.head.fromAct, activity.id, dataEntries.head.injectId))
 

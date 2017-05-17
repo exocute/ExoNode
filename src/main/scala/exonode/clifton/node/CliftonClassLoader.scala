@@ -26,44 +26,47 @@ class CliftonClassLoader() extends ClassLoader(getClass.getClassLoader) {
 
       // loop over the jar input stream and load all of the classes byte arrays
       // into hash map so that they can referenced in any order by the class loader.
-      var je: JarEntry = null
-      while ( {
-        je = jis.getNextJarEntry
-        je != null
-      }) {
+
+      def getAllJarEntries: Stream[JarEntry] = Option(jis.getNextJarEntry) match {
+        case None => Stream.empty
+        case Some(jarEntry) => jarEntry #:: {
+          jis.closeEntry()
+          getAllJarEntries
+        }
+      }
+
+      for (je <- getAllJarEntries) {
         // only load the classes
         if (je.getName.endsWith(ClassExtension)) {
-          var entrySize = je.getSize.toInt
-
-          // Jar is probably compressed, so we don't know the size of it.
-          if (entrySize == -1) {
-            entrySize = 1024
-          }
-
-          var byteCode: Array[Byte] = Array.ofDim[Byte](entrySize)
-
-          var readLen = -2
-          var totalLen = 0
-          while (readLen != -1 && readLen != 0) {
-            readLen = jis.read(byteCode, totalLen, byteCode.length
-              - totalLen)
-            if (readLen != -1) {
-              totalLen += readLen
+          val entrySize =
+            je.getSize.toInt match {
+              // Jar is probably compressed, so we don't know the size of it.
+              case -1 => 1024
+              case value => value
             }
-            if (totalLen == byteCode.length) {
-              // Need to increase
-              // the size of the
-              // byteCodeBuffer
-              val newByteCode = Array.ofDim[Byte](byteCode.length * 2)
-              System.arraycopy(byteCode, 0, newByteCode, 0, byteCode.length)
-              byteCode = newByteCode
+
+          def readLoop(byteCode: Array[Byte], readLen: Int, totalLen: Int): (Array[Byte], Int) = {
+            if (readLen != -1 && readLen != 0) {
+              val newReadLen = jis.read(byteCode, totalLen, byteCode.length - totalLen)
+              val newTotalLen = totalLen + (if (newReadLen != -1) newReadLen else 0)
+              if (newTotalLen == byteCode.length) {
+                // Need to increase the size of the byteCodeBuffer
+                val newByteCode = Array.ofDim[Byte](byteCode.length * 2)
+                System.arraycopy(byteCode, 0, newByteCode, 0, byteCode.length)
+                readLoop(newByteCode, newReadLen, newTotalLen)
+              } else
+                readLoop(byteCode, newReadLen, newTotalLen)
+            } else {
+              (byteCode, totalLen)
             }
           }
+
+          val (byteCode, totalLen) =
+            readLoop(Array.ofDim[Byte](entrySize), -2, 0)
 
           // resize the byteCode
-          val newByteCode = Array.ofDim[Byte](totalLen)
-          System.arraycopy(byteCode, 0, newByteCode, 0, totalLen)
-          byteCode = newByteCode
+          val finalByteCode = Array.ofDim[Byte](totalLen)
+          System.arraycopy(byteCode, 0, finalByteCode, 0, totalLen)
 
           // make the class name compliant for post 1.4.2-02
           // implementations
@@ -76,9 +79,11 @@ class CliftonClassLoader() extends ClassLoader(getClass.getClassLoader) {
             else
               name
           }
-          classByteCodes.put(className, byteCode)
+          classByteCodes.put(className, finalByteCode)
         }
       }
+
+      jis.close()
     } catch {
       case e: Exception => e.printStackTrace(System.err)
     }

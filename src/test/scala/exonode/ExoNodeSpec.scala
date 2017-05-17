@@ -34,13 +34,12 @@ class ExoNodeSpec extends FlatSpec with BeforeAndAfter {
   private var allNodes = List[CliftonNode]()
 
   private def launchNNodes(nodes: Int): List[CliftonNode] = {
-    val nodesList = for {
-      _ <- 1 to nodes
-    } yield {
-      val node = new CliftonNode()
-      allNodes = node :: allNodes
-      node
-    }
+    val nodesList =
+      for (_ <- 1 to nodes) yield {
+        val node = new CliftonNode()
+        allNodes = node :: allNodes
+        node
+      }
     nodesList.foreach(node => node.start())
     nodesList.toList
   }
