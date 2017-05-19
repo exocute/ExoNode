@@ -7,7 +7,7 @@ An ExoNode is an amount of logic coded and running in a closed loop inside a sin
 able to interpret the Space it is connected to and to pick-up an Activity and execute it when the
 corresponding inputs are available.
 
-For more information about the Exonode: goo.gl/eR06VD
+For more information about the Exonode: https://goo.gl/eR06VD
 
 ## Releases
 28/04/2017 <br />
