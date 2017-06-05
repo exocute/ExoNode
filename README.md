@@ -1,15 +1,19 @@
 # ExoNode
 
-Scala Version of ExoNode Plataform 
+Scala Version of ExoNode Platform 
 
 -------------------------------------------------------------------------------
 An ExoNode is an amount of logic coded and running in a closed loop inside a single thread which is
 able to interpret the Space it is connected to and to pick-up an Activity and execute it when the
 corresponding inputs are available.
 
-For more information about the Exonode: https://goo.gl/eR06VD
+For more information about the ExoNode: https://goo.gl/fR0Ngg
 
 ## Releases
+
+05/06/2017 <br />
+--> **ExoNode v1.3** <br />
+
 28/04/2017 <br />
 --> **ExoNode v1.2** <br />
 
@@ -32,7 +36,7 @@ Options available: <br />
 | `-s`              | sets signal space                      |
 | `-d  `            | sets data space                        |
 | `-j `             | sets jar space                         |
-| `-nodes N `       | launchs N nodes into the space         |
+| `-nodes N `       | launches N nodes into the space         |
 | `-cleanspaces`    | cleans all the entries for every space | 
 | `--help    `      | display help and exit                  | 
 | `--version`       | ouput version information and exit     | 
@@ -47,7 +51,6 @@ Options available: <br />
  
 | Software       | Version       | Link                                   |
 | ---------------|:-------------:| --------------------------------------:|
-| Scala          | 2.12.1        |                                        |
+| Scala          | 2.12.2        |                                        |
 | Java           | 1.8           | http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html                                       |
-| FlyObjectSpace | 2.2.0      |  https://github.com/fly-object-space/fly-scala   |
-
+| FlyObjectSpace | 2.2.0         |  https://github.com/fly-object-space/fly-scala   |
